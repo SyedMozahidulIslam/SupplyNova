@@ -9,7 +9,29 @@ import {
   MapPin,
   CheckCircle,
   TrendingDown,
+  Calendar,
+  TrendingUp,
+  Sparkles,
+  DollarSign,
+  Zap,
+  Boxes,
+  Play,
+  Check,
+  AlertCircle,
+  ArrowRight,
+  Clock
 } from 'lucide-react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  Cell
+} from 'recharts';
 import { Warehouse, Product } from '../types';
 import { WAREHOUSES, PRODUCTS } from '../data/mockData';
 
@@ -17,29 +39,159 @@ interface WarehouseModuleProps {
   warehouses: Warehouse[];
   onUpdateStock: (sku: string, newQty: number) => void;
   onReportDamage: (sku: string, qty: number, comment: string) => void;
+  onAddAuditLog?: (
+    actionType: 'create' | 'update' | 'delete' | 'approve' | 'configure' | 'override' | 'mitigate',
+    module: 'procurement' | 'warehouse' | 'fleet' | 'coldchain' | 'sales' | 'finance' | 'sustainability' | 'general',
+    description: string,
+    severity?: 'low' | 'medium' | 'high' | 'critical',
+    stateBefore?: string,
+    stateAfter?: string
+  ) => void;
 }
 
 export default function WarehouseModule({
   warehouses,
   onUpdateStock,
   onReportDamage,
+  onAddAuditLog,
 }: WarehouseModuleProps) {
   const [selectedWarehouseId, setSelectedWarehouseId] = useState('wh-1');
-  const [activeSubTab, setActiveSubTab] = useState<'layout' | 'audit' | 'damage'>('layout');
+  const [products, setProducts] = useState<Product[]>(PRODUCTS);
+  const [activeSubTab, setActiveSubTab] = useState<'layout' | 'audit' | 'damage' | 'aging'>('layout');
   const [selectedRack, setSelectedRack] = useState<any>(null);
 
+  // Liquidation engine states
+  const [activeLiquidationSku, setActiveLiquidationSku] = useState<string | null>(null);
+  const [clearedLiquidationSkus, setClearedLiquidationSkus] = useState<string[]>([]);
+  const [liquidationProgress, setLiquidationProgress] = useState(0);
+
+  const getProductAgingDistributionForCompleteness = (item: Product) => {
+    const total = item.stockLevel;
+    const seed = item.sku.charCodeAt(item.sku.length - 1) % 10;
+    
+    let p0_30 = 0.7;
+    let p31_60 = 0.2;
+    let p61_90 = 0.08;
+    let p90_plus = 0.02;
+
+    if (!item.fastMoving) {
+      p0_30 = 0.12 + (seed * 0.01);
+      p31_60 = 0.20 + (seed * 0.015);
+      p61_90 = 0.38 - (seed * 0.01);
+      p90_plus = 0.30 - (seed * 0.015);
+    } else {
+      p0_30 = 0.80 + (seed * 0.01);
+      p31_60 = 0.12 - (seed * 0.005);
+      p61_90 = 0.06 - (seed * 0.003);
+      p90_plus = 0.02;
+    }
+
+    const sum = p0_30 + p31_60 + p61_90 + p90_plus;
+    const b0_30 = Math.round(total * (p0_30 / sum));
+    const b31_60 = Math.round(total * (p31_60 / sum));
+    const b61_90 = Math.round(total * (p61_90 / sum));
+    const b90_plus = Math.max(0, total - b0_30 - b31_60 - b61_90);
+
+    return { b0_30, b31_60, b61_90, b90_plus };
+  };
+
+  const getLiquidationStrategyForProduct = (p: Product, idx: number) => {
+    if (idx === 0) {
+      return {
+        method: "B2B WHOLESALE",
+        title: `Regional Distributor Clearance for SKU ${p.sku}`,
+        description: `Execute high-volume dispatch of stagnant ${p.category} units to certified wholesalers in Chittagong, liquidating stagnant capacity at a bulk salvage wholesale margin.`,
+        discountRate: 65,
+        salvagePriceBDT: Math.round(p.priceBDT * 0.65),
+        estRecoveryValue: Math.round(getProductAgingDistributionForCompleteness(p).b90_plus * p.priceBDT * 0.65)
+      };
+    } else if (idx === 1) {
+      return {
+        method: "SFA BUNDLED PROMO",
+        title: `Salesforce Smart Multi-Buy Campaign`,
+        description: `Push real-time multi-buy discount triggers directly to the Sales Agent Beat app, pairing slow-moving ${p.sku} with active fast-moving SKUs of same class.`,
+        discountRate: 50,
+        salvagePriceBDT: Math.round(p.priceBDT * 0.50),
+        estRecoveryValue: Math.round(getProductAgingDistributionForCompleteness(p).b90_plus * p.priceBDT * 0.50)
+      };
+    } else {
+      return {
+        method: "DIRECT RETAIL FLASH",
+        title: `Dynamic Retail Markdown & Flash clearance`,
+        description: `Trigger automatic price markdowns to registered retail stores via the corporate logistics portal to fast-track clearing stock ahead of the next fiscal audit.`,
+        discountRate: 40,
+        salvagePriceBDT: Math.round(p.priceBDT * 0.40),
+        estRecoveryValue: Math.round(getProductAgingDistributionForCompleteness(p).b90_plus * p.priceBDT * 0.40)
+      };
+    }
+  };
+
+  const handleExecuteLiquidation = (p: Product, strategy: any) => {
+    setActiveLiquidationSku(p.sku);
+    setLiquidationProgress(5);
+    
+    const interval = setInterval(() => {
+      setLiquidationProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          return 100;
+        }
+        return prev + 15;
+      });
+    }, 300);
+
+    setTimeout(() => {
+      clearInterval(interval);
+      const aging = getProductAgingDistributionForCompleteness(p);
+      const clearedVolume = aging.b90_plus;
+      
+      // Update ERP stock Level dynamically
+      onUpdateStock(p.sku, Math.max(0, p.stockLevel - clearedVolume));
+
+      setProducts(prev => prev.map(item => {
+        if (item.sku === p.sku) {
+          const newStockLevel = Math.max(0, item.stockLevel - clearedVolume);
+          return {
+            ...item,
+            stockLevel: newStockLevel,
+            status: newStockLevel > item.minSafetyStock ? 'in_stock' : newStockLevel > 0 ? 'low_stock' : 'out_of_stock'
+          };
+        }
+        return item;
+      }));
+
+      setClearedLiquidationSkus(prev => [...prev, p.sku]);
+      setActiveLiquidationSku(null);
+      setLiquidationProgress(0);
+
+      if (onAddAuditLog) {
+        onAddAuditLog(
+          'override',
+          'warehouse',
+          `Authorized AI Liquidation strategy [${strategy.method}] for SKU ${p.sku} ("${p.name}"). Cleared ${clearedVolume.toLocaleString()} units of stagnant stock, recovering ৳${strategy.estRecoveryValue.toLocaleString()} BDT.`,
+          'high',
+          `stock_level: ${p.stockLevel.toLocaleString()}, b90_plus: ${clearedVolume.toLocaleString()}`,
+          `stock_level: ${(p.stockLevel - clearedVolume).toLocaleString()}, b90_plus: 0 (Cleared)`
+        );
+      }
+
+      setSuccessMsg(`AI Clearance Dispatched: Successfully liquidated ${p.sku} dead stock. Recovered BDT ৳${strategy.estRecoveryValue.toLocaleString()} in secondary capital channels.`);
+      setTimeout(() => setSuccessMsg(''), 5000);
+    }, 2500);
+  };
+
   // Cycle Counting form state
-  const [auditSku, setAuditSku] = useState(PRODUCTS[0]?.sku || '');
+  const [auditSku, setAuditSku] = useState(products[0]?.sku || '');
   const [auditQty, setAuditQty] = useState(1000);
 
   // Damage report form state
-  const [damageSku, setDamageSku] = useState(PRODUCTS[0]?.sku || '');
+  const [damageSku, setDamageSku] = useState(products[0]?.sku || '');
   const [damageQty, setDamageQty] = useState(50);
   const [damageComment, setDamageComment] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
   const activeWarehouse = warehouses.find(w => w.id === selectedWarehouseId) || warehouses[0];
-  const warehouseProducts = PRODUCTS.filter(p => p.warehouseId === selectedWarehouseId);
+  const warehouseProducts = products.filter(p => p.warehouseId === selectedWarehouseId);
 
   const getFillColor = (percent: number) => {
     if (percent > 90) return 'bg-accent-rose text-black border-accent-rose/50';
@@ -60,6 +212,14 @@ export default function WarehouseModule({
   const handleUpdateAudit = (e: React.FormEvent) => {
     e.preventDefault();
     onUpdateStock(auditSku, auditQty);
+    
+    // Sync local products state
+    setProducts(prev => prev.map(p => p.sku === auditSku ? {
+      ...p,
+      stockLevel: auditQty,
+      status: auditQty > p.minSafetyStock ? 'in_stock' : auditQty > 0 ? 'low_stock' : 'out_of_stock'
+    } : p));
+
     setSuccessMsg(`Cycle Count recorded. SKU ${auditSku} adjusted to ${auditQty.toLocaleString()} units.`);
     setTimeout(() => setSuccessMsg(''), 4000);
   };
@@ -67,6 +227,14 @@ export default function WarehouseModule({
   const handleReportDamageSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onReportDamage(damageSku, damageQty, damageComment);
+    
+    // Sync local products state by subtracting damaged quantity
+    setProducts(prev => prev.map(p => p.sku === damageSku ? {
+      ...p,
+      stockLevel: Math.max(0, p.stockLevel - damageQty),
+      status: Math.max(0, p.stockLevel - damageQty) > p.minSafetyStock ? 'in_stock' : Math.max(0, p.stockLevel - damageQty) > 0 ? 'low_stock' : 'out_of_stock'
+    } : p));
+
     setSuccessMsg(`Damage Report compiled. ${damageQty} units of SKU ${damageSku} isolated for disposal.`);
     setDamageComment('');
     setTimeout(() => setSuccessMsg(''), 4000);
@@ -132,34 +300,42 @@ export default function WarehouseModule({
 
         {/* Action navigation card */}
         <div className="p-6 rounded border border-white/10 bg-white/5 flex flex-col justify-between">
-          <h3 className="text-xs font-black uppercase tracking-widest text-gray-500">Inventory Auditing Panel</h3>
+          <h3 className="text-xs font-black uppercase tracking-widest text-gray-500">Inventory Auditing & Analytics Panel</h3>
           <p className="text-xs text-gray-300 leading-relaxed mt-1">
-            Perform cycle counting audits and record material damages directly inside the digital twin layout.
+            Track spatial allocations, verify ERP stock counts, file damage claims, or audit inventory aging profiles with AI remediation.
           </p>
-          <div className="grid grid-cols-3 gap-2 mt-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mt-4">
             <button
               onClick={() => setActiveSubTab('layout')}
-              className={`py-2.5 text-[10px] font-black uppercase tracking-widest rounded border text-center transition-all cursor-pointer ${
-                activeSubTab === 'layout' ? 'bg-accent-cyan border-accent-cyan text-black' : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'
+              className={`py-2 text-[10px] font-black uppercase tracking-widest rounded border text-center transition-all cursor-pointer ${
+                activeSubTab === 'layout' ? 'bg-accent-cyan border-accent-cyan text-black font-extrabold' : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'
               }`}
             >
               Digital Twin
             </button>
             <button
               onClick={() => setActiveSubTab('audit')}
-              className={`py-2.5 text-[10px] font-black uppercase tracking-widest rounded border text-center transition-all cursor-pointer ${
-                activeSubTab === 'audit' ? 'bg-accent-cyan border-accent-cyan text-black' : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'
+              className={`py-2 text-[10px] font-black uppercase tracking-widest rounded border text-center transition-all cursor-pointer ${
+                activeSubTab === 'audit' ? 'bg-accent-cyan border-accent-cyan text-black font-extrabold' : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'
               }`}
             >
               Cycle Count
             </button>
             <button
               onClick={() => setActiveSubTab('damage')}
-              className={`py-2.5 text-[10px] font-black uppercase tracking-widest rounded border text-center transition-all cursor-pointer ${
-                activeSubTab === 'damage' ? 'bg-accent-cyan border-accent-cyan text-black' : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'
+              className={`py-2 text-[10px] font-black uppercase tracking-widest rounded border text-center transition-all cursor-pointer ${
+                activeSubTab === 'damage' ? 'bg-accent-cyan border-accent-cyan text-black font-extrabold' : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'
               }`}
             >
               Damage Log
+            </button>
+            <button
+              onClick={() => setActiveSubTab('aging')}
+              className={`py-2 text-[10px] font-black uppercase tracking-widest rounded border text-center transition-all cursor-pointer ${
+                activeSubTab === 'aging' ? 'bg-accent-cyan border-accent-cyan text-black font-extrabold' : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'
+              }`}
+            >
+              Aging & AI Suggestions
             </button>
           </div>
         </div>
@@ -407,6 +583,282 @@ export default function WarehouseModule({
           </form>
         </div>
       )}
+
+      {/* SUB-TAB 4: INVENTORY AGING & AI LIQUIDATION */}
+      {activeSubTab === 'aging' && (() => {
+        const getProductAgingDistribution = (p: Product) => {
+          const total = p.stockLevel;
+          const seed = p.sku.charCodeAt(p.sku.length - 1) % 10;
+          
+          let p0_30 = 0.7;
+          let p31_60 = 0.2;
+          let p61_90 = 0.08;
+          let p90_plus = 0.02;
+
+          if (!p.fastMoving) {
+            p0_30 = 0.12 + (seed * 0.01);
+            p31_60 = 0.20 + (seed * 0.015);
+            p61_90 = 0.38 - (seed * 0.01);
+            p90_plus = 0.30 - (seed * 0.015);
+          } else {
+            p0_30 = 0.80 + (seed * 0.01);
+            p31_60 = 0.12 - (seed * 0.005);
+            p61_90 = 0.06 - (seed * 0.003);
+            p90_plus = 0.02;
+          }
+
+          const sum = p0_30 + p31_60 + p61_90 + p90_plus;
+          const b0_30 = Math.round(total * (p0_30 / sum));
+          const b31_60 = Math.round(total * (p31_60 / sum));
+          const b61_90 = Math.round(total * (p61_90 / sum));
+          const b90_plus = Math.max(0, total - b0_30 - b31_60 - b61_90);
+
+          return { b0_30, b31_60, b61_90, b90_plus };
+        };
+
+        const agedProducts = warehouseProducts.map(p => {
+          const aging = getProductAgingDistribution(p);
+          const deadStockValue = aging.b90_plus * p.priceBDT;
+          const totalValue = p.stockLevel * p.priceBDT;
+          return {
+            ...p,
+            ...aging,
+            deadStockValue,
+            totalValue
+          };
+        });
+
+        const totalStockVolume = agedProducts.reduce((sum, p) => sum + p.stockLevel, 0);
+        const totalDeadStockVolume = agedProducts.reduce((sum, p) => sum + p.b90_plus, 0);
+        const totalWarehouseValue = agedProducts.reduce((sum, p) => sum + p.totalValue, 0);
+        const totalDeadStockValue = agedProducts.reduce((sum, p) => sum + p.deadStockValue, 0);
+        const deadStockRatio = totalStockVolume > 0 ? (totalDeadStockVolume / totalStockVolume) * 100 : 0;
+        
+        const estHoldingCost = totalDeadStockValue * 0.018;
+
+        const uniqueCategories = Array.from(new Set(agedProducts.map(p => p.category)));
+        const chartData = uniqueCategories.map(cat => {
+          const catProducts = agedProducts.filter(p => p.category === cat);
+          const b0_30 = catProducts.reduce((sum, p) => sum + p.b0_30, 0);
+          const b31_60 = catProducts.reduce((sum, p) => sum + p.b31_60, 0);
+          const b61_90 = catProducts.reduce((sum, p) => sum + p.b61_90, 0);
+          const b90_plus = catProducts.reduce((sum, p) => sum + p.b90_plus, 0);
+          return {
+            name: cat,
+            "0-30 Days (Active)": b0_30,
+            "31-60 Days (Stable)": b31_60,
+            "61-90 Days (Slow)": b61_90,
+            "90+ Days (Dead Stock)": b90_plus,
+          };
+        });
+
+        const topDeadStockItems = [...agedProducts]
+          .filter(p => p.b90_plus > 20)
+          .sort((a, b) => b.deadStockValue - a.deadStockValue)
+          .slice(0, 3);
+
+        return (
+          <div className="space-y-6">
+            {/* KPI Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-white/[0.02] p-4 rounded-xl border border-white/5 space-y-1">
+                <span className="text-gray-500 block text-[9px] font-mono font-black uppercase tracking-wider">Total Stored Value</span>
+                <span className="text-xl font-display font-black text-white block">৳{totalWarehouseValue.toLocaleString()}</span>
+                <span className="text-[10px] text-gray-400 block font-mono">{totalStockVolume.toLocaleString()} units stored</span>
+              </div>
+              <div className="bg-white/[0.02] p-4 rounded-xl border border-white/5 space-y-1">
+                <span className="text-accent-rose block text-[9px] font-mono font-black uppercase tracking-wider">Dead Stock tied-up</span>
+                <span className="text-xl font-display font-black text-accent-rose block">৳{totalDeadStockValue.toLocaleString()}</span>
+                <span className="text-[10px] text-accent-rose/70 block font-mono">{totalDeadStockVolume.toLocaleString()} units (&gt;90 days)</span>
+              </div>
+              <div className="bg-white/[0.02] p-4 rounded-xl border border-white/5 space-y-1">
+                <span className="text-accent-amber block text-[9px] font-mono font-black uppercase tracking-wider">Dead Stock Ratio</span>
+                <span className="text-xl font-display font-black text-accent-amber block">{deadStockRatio.toFixed(1)}%</span>
+                <span className="text-[10px] text-gray-400 block font-mono">
+                  {deadStockRatio > 15 ? '⚠️ High risk overhead' : '✅ Below SLA risk threshold'}
+                </span>
+              </div>
+              <div className="bg-white/[0.02] p-4 rounded-xl border border-white/5 space-y-1">
+                <span className="text-accent-cyan block text-[9px] font-mono font-black uppercase tracking-wider">Est. Carrying Costs /Mo</span>
+                <span className="text-xl font-display font-black text-accent-cyan block">৳{Math.round(estHoldingCost).toLocaleString()}</span>
+                <span className="text-[10px] text-gray-400 block font-mono">At 1.8% average monthly capital loss</span>
+              </div>
+            </div>
+
+            {/* Middle Section: Chart and High-Risk List */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Stacked Bar Chart */}
+              <div className="lg:col-span-2 bg-white/[0.02] p-5 rounded-2xl border border-white/5 space-y-4">
+                <div>
+                  <h4 className="text-sm font-bold text-white font-display">Inventory Aging Distribution by Category</h4>
+                  <p className="text-[10px] text-white/40 font-mono mt-0.5 uppercase tracking-wider">Stacked volumetric comparison across product classes</p>
+                </div>
+                <div className="h-72 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={chartData}
+                      margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                      <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" fontSize={9} fontClassName="font-mono" tickLine={false} />
+                      <YAxis stroke="rgba(255,255,255,0.3)" fontSize={9} fontClassName="font-mono" tickLine={false} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#0a0a0a',
+                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          borderRadius: '8px',
+                          color: '#fff',
+                          fontFamily: 'monospace',
+                          fontSize: '11px'
+                        }}
+                      />
+                      <Legend iconSize={8} iconType="circle" wrapperStyle={{ fontSize: '10px', color: '#aaa', marginTop: '10px' }} />
+                      <Bar dataKey="0-30 Days (Active)" stackId="a" fill="#10b981" />
+                      <Bar dataKey="31-60 Days (Stable)" stackId="a" fill="#06b6d4" />
+                      <Bar dataKey="61-90 Days (Slow)" stackId="a" fill="#f59e0b" />
+                      <Bar dataKey="90+ Days (Dead Stock)" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Dead Stock Heavy SKUs */}
+              <div className="bg-white/[0.02] p-5 rounded-2xl border border-white/5 flex flex-col justify-between space-y-4">
+                <div>
+                  <h4 className="text-sm font-bold text-white font-display">Aged Dead Stock Hotspots (&gt;90 Days)</h4>
+                  <p className="text-[10px] text-white/40 font-mono mt-0.5 uppercase tracking-wider">Urgent clearing candidates ordered by capital tie-up</p>
+                </div>
+                <div className="space-y-3 flex-1 overflow-y-auto max-h-[240px] pr-1 scrollbar-thin">
+                  {agedProducts.filter(p => p.b90_plus > 0).sort((a,b) => b.deadStockValue - a.deadStockValue).map(p => {
+                    const ratio = p.stockLevel > 0 ? (p.b90_plus / p.stockLevel) * 100 : 0;
+                    return (
+                      <div key={p.id} className="p-3 rounded bg-white/[0.01] border border-white/5 space-y-2 text-xs">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <span className="font-mono text-[10px] text-accent-cyan font-bold block">{p.sku}</span>
+                            <span className="text-white font-medium line-clamp-1">{p.name}</span>
+                          </div>
+                          <span className="text-[9px] px-1.5 py-0.5 font-bold uppercase rounded bg-accent-rose/20 text-accent-rose shrink-0">
+                            {ratio.toFixed(0)}% Dead
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-1 text-[10px] font-mono text-gray-400">
+                          <div>Dead Volume: <span className="text-white font-bold">{p.b90_plus.toLocaleString()} u</span></div>
+                          <div>Tied Capital: <span className="text-white font-bold">৳{p.deadStockValue.toLocaleString()}</span></div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[10px] text-white/30 font-mono">
+                  <span>Automatic WMS Alerts Active</span>
+                  <Clock size={10} />
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Section: AI Liquidation Engine (Interactive) */}
+            <div className="bg-white/[0.02] p-6 rounded-2xl border border-white/5 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-base font-bold text-white font-display flex items-center gap-2">
+                    <Sparkles size={16} className="text-accent-cyan animate-pulse" /> AI Inventory Liquidation Engine
+                  </h4>
+                  <p className="text-xs text-white/50 mt-1">
+                    Smart algorithms generating immediate recovery workflows for stagnant assets in this warehouse zone.
+                  </p>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 rounded border border-accent-cyan/30 bg-accent-cyan/10 text-accent-cyan font-mono font-bold uppercase shrink-0">
+                  ⚡ Models preloaded
+                </span>
+              </div>
+
+              {topDeadStockItems.length === 0 ? (
+                <div className="p-8 text-center text-xs text-white/40 flex flex-col items-center gap-2">
+                  <CheckCircle size={24} className="text-accent-emerald" />
+                  No excessive dead stock identified in this digital twin node. Maximum inventory turnaround rate achieved!
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                  {topDeadStockItems.map((p, idx) => {
+                    const strategy = getLiquidationStrategyForProduct(p, idx);
+                    const isProcessing = activeLiquidationSku === p.sku;
+                    const isSuccess = clearedLiquidationSkus.includes(p.sku);
+
+                    return (
+                      <div 
+                        key={p.sku} 
+                        className={`p-4 rounded-xl border flex flex-col justify-between space-y-4 transition-all ${
+                          isSuccess 
+                            ? 'bg-accent-emerald/[0.02] border-accent-emerald/30 opacity-75' 
+                            : 'bg-white/[0.01] border-white/5 hover:border-white/10'
+                        }`}
+                      >
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[9px] px-2 py-0.5 rounded font-mono font-bold bg-white/10 text-white uppercase">
+                              {strategy.method}
+                            </span>
+                            <span className="text-[10px] text-accent-cyan font-bold font-mono">
+                              Recovery: ৳{strategy.estRecoveryValue.toLocaleString()}
+                            </span>
+                          </div>
+
+                          <h5 className="text-xs font-bold text-white mt-1 uppercase tracking-tight">{strategy.title}</h5>
+                          <p className="text-[11px] text-white/60 leading-relaxed">{strategy.description}</p>
+                          
+                          <div className="bg-black/25 p-2 rounded border border-white/[0.03] space-y-1 text-[10px] font-mono text-gray-400">
+                            <div className="flex justify-between">
+                              <span>Target Item:</span>
+                              <span className="text-white font-medium truncate max-w-[120px]">{p.name}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Units to Clear:</span>
+                              <span className="text-accent-rose font-bold">{p.b90_plus.toLocaleString()} units</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Original Capital:</span>
+                              <span className="text-white">৳{p.deadStockValue.toLocaleString()} BDT</span>
+                            </div>
+                            <div className="flex justify-between text-[11px] text-accent-amber pt-1 border-t border-white/[0.05] font-black">
+                              <span>Recovery Yield:</span>
+                              <span>{strategy.discountRate}% (৳{strategy.salvagePriceBDT.toLocaleString()}/unit)</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>
+                          {isSuccess ? (
+                            <div className="w-full py-2 bg-accent-emerald/10 border border-accent-emerald/20 text-accent-emerald text-center text-[10px] font-mono font-bold uppercase rounded flex items-center justify-center gap-1">
+                              <Check size={12} /> Strategy Executed
+                            </div>
+                          ) : isProcessing ? (
+                            <div className="space-y-1.5">
+                              <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                                <div className="bg-accent-cyan h-full rounded-full animate-pulse" style={{ width: `${liquidationProgress}%`, transition: 'width 200ms ease' }}></div>
+                              </div>
+                              <span className="text-[9px] text-accent-cyan font-mono block text-center uppercase tracking-widest font-black">
+                                {liquidationProgress < 25 ? 'Re-routing WMS ledger...' : liquidationProgress < 60 ? 'Creating discount contracts...' : liquidationProgress < 90 ? 'Updating SFA databases...' : 'Finalizing compliance signatures...'}
+                              </span>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handleExecuteLiquidation(p, strategy)}
+                              className="w-full py-2 bg-accent-cyan hover:bg-accent-cyan/90 text-black text-[10px] font-mono font-black uppercase tracking-wider rounded flex items-center justify-center gap-1 transition-all cursor-pointer"
+                            >
+                              <Play size={10} fill="#000" /> Dispatch Clearance
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

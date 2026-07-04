@@ -593,6 +593,7 @@ export default function App() {
               warehouses={warehouses}
               onUpdateStock={handleUpdateStock}
               onReportDamage={handleReportDamage}
+              onAddAuditLog={addAuditLog}
             />
           )}
 
