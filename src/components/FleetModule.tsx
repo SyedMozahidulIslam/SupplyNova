@@ -29,6 +29,7 @@ export default function FleetModule({ vehicles, onTriggerRerouting }: FleetModul
   const [optimizedRouteMsg, setOptimizedRouteMsg] = useState('');
   const [tick, setTick] = useState(0);
   const [mapViewMode, setMapViewMode] = useState<'interactive' | 'abstract'>('interactive');
+  const [showFuelHeatmap, setShowFuelHeatmap] = useState(true);
 
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -173,6 +174,93 @@ export default function FleetModule({ vehicles, onTriggerRerouting }: FleetModul
             'line-opacity': 0.8
           }
         });
+      });
+
+      // Add dynamic fuel-heatmap-source and layer
+      map.addSource('fuel-heatmap-source', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: vehicles.map((v) => {
+            const latLng = getAnimatedLatLng(v);
+            const fuel = v.fuelConsumptionRate || 0;
+            const engineHealth = v.engineHealth || 100;
+            const engineStrain = (100 - engineHealth) / 100;
+            const weight = fuel * (1 + engineStrain);
+            return {
+              type: 'Feature',
+              geometry: {
+                type: 'Point',
+                coordinates: [latLng.lng, latLng.lat]
+              },
+              properties: {
+                weight,
+                fuelConsumptionRate: fuel,
+                engineHealth
+              }
+            };
+          })
+        }
+      });
+
+      map.addLayer({
+        id: 'fuel-heatmap-layer',
+        type: 'heatmap',
+        source: 'fuel-heatmap-source',
+        maxzoom: 15,
+        paint: {
+          'heatmap-weight': [
+            'interpolate',
+            ['linear'],
+            ['get', 'weight'],
+            0,
+            0,
+            10,
+            0.15,
+            30,
+            0.5,
+            60,
+            1.0
+          ],
+          'heatmap-intensity': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            0,
+            0.5,
+            9,
+            2.0
+          ],
+          'heatmap-color': [
+            'interpolate',
+            ['linear'],
+            ['heatmap-density'],
+            0,
+            'rgba(6, 182, 212, 0)',
+            0.15,
+            'rgba(6, 182, 212, 0.25)',
+            0.4,
+            'rgba(16, 185, 129, 0.45)',
+            0.65,
+            'rgba(245, 158, 11, 0.70)',
+            0.85,
+            'rgba(249, 115, 22, 0.85)',
+            1.0,
+            'rgba(244, 63, 94, 0.95)'
+          ],
+          'heatmap-radius': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            0,
+            20,
+            9,
+            55,
+            15,
+            95
+          ],
+          'heatmap-opacity': 0.85
+        }
       });
 
       // Add route layers for vehicles in transit
@@ -338,8 +426,42 @@ export default function FleetModule({ vehicles, onTriggerRerouting }: FleetModul
           map.setPaintProperty(layerId, 'line-opacity', isSelected ? 0.9 : 0.4);
         }
       });
+
+      // Update heatmap visibility
+      if (map.getLayer('fuel-heatmap-layer')) {
+        map.setLayoutProperty('fuel-heatmap-layer', 'visibility', showFuelHeatmap ? 'visible' : 'none');
+      }
+
+      // Update heatmap source data dynamically
+      const heatmapSource = map.getSource('fuel-heatmap-source') as maplibregl.GeoJSONSource | undefined;
+      if (heatmapSource) {
+        const features = vehicles.map((v) => {
+          const latLng = getAnimatedLatLng(v);
+          const fuel = v.fuelConsumptionRate || 0;
+          const engineHealth = v.engineHealth || 100;
+          const engineStrain = (100 - engineHealth) / 100;
+          const weight = fuel * (1 + engineStrain);
+          return {
+            type: 'Feature' as const,
+            geometry: {
+              type: 'Point' as const,
+              coordinates: [latLng.lng, latLng.lat]
+            },
+            properties: {
+              weight,
+              fuelConsumptionRate: fuel,
+              engineHealth
+            }
+          };
+        });
+
+        heatmapSource.setData({
+          type: 'FeatureCollection',
+          features
+        });
+      }
     }
-  }, [vehicles, selectedVehicleId, tick, mapViewMode]);
+  }, [vehicles, selectedVehicleId, tick, mapViewMode, showFuelHeatmap]);
 
   // Handle active fly-to panning to keep selected vehicle in viewpoint
   useEffect(() => {
@@ -395,24 +517,40 @@ export default function FleetModule({ vehicles, onTriggerRerouting }: FleetModul
               <Activity size={12} className="text-accent-emerald animate-ping" /> Real-time GPS stream
             </div>
             
-            {/* View Mode Toggle */}
-            <div className="flex items-center gap-1 bg-white/5 p-1 rounded border border-white/10">
+            <div className="flex items-center gap-2">
+              {/* Heatmap Toggle Button */}
               <button
-                onClick={() => setMapViewMode('interactive')}
-                className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                  mapViewMode === 'interactive' ? 'bg-accent-blue text-white' : 'text-gray-400 hover:text-white'
+                onClick={() => setShowFuelHeatmap(!showFuelHeatmap)}
+                className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer border flex items-center gap-1.5 ${
+                  showFuelHeatmap
+                    ? 'bg-accent-rose/10 text-accent-rose border-accent-rose/30 hover:bg-accent-rose/25'
+                    : 'bg-white/5 text-gray-400 border-white/10 hover:text-white hover:border-white/20'
                 }`}
+                title="Toggle Real-time Fuel Consumption Heatmap Overlay"
               >
-                Interactive Map
+                <div className={`w-1.5 h-1.5 rounded-full ${showFuelHeatmap ? 'bg-accent-rose animate-pulse' : 'bg-gray-500'}`} />
+                Fuel Heatmap: {showFuelHeatmap ? 'ON' : 'OFF'}
               </button>
-              <button
-                onClick={() => setMapViewMode('abstract')}
-                className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                  mapViewMode === 'abstract' ? 'bg-accent-blue text-white' : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                Abstract Vector
-              </button>
+
+              {/* View Mode Toggle */}
+              <div className="flex items-center gap-1 bg-white/5 p-1 rounded border border-white/10">
+                <button
+                  onClick={() => setMapViewMode('interactive')}
+                  className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                    mapViewMode === 'interactive' ? 'bg-accent-blue text-white' : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  Interactive Map
+                </button>
+                <button
+                  onClick={() => setMapViewMode('abstract')}
+                  className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                    mapViewMode === 'abstract' ? 'bg-accent-blue text-white' : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  Abstract Vector
+                </button>
+              </div>
             </div>
           </div>
 
@@ -443,6 +581,15 @@ export default function FleetModule({ vehicles, onTriggerRerouting }: FleetModul
                 <div className="flex items-center gap-2">
                   <span className="w-4 h-0.5 border-t border-dashed border-[#f43f5e] inline-block"></span>
                   <span className="text-gray-300 font-bold uppercase text-[9px]">Traffic Congestion</span>
+                </div>
+                <div className="border-t border-white/5 pt-1.5 space-y-1">
+                  <div className="text-gray-400 font-bold uppercase text-[8px] tracking-wider">Fuel Consumption Scale</div>
+                  <div className="h-1.5 w-full rounded bg-gradient-to-r from-cyan-500 via-emerald-500 via-amber-500 to-rose-500 opacity-80" />
+                  <div className="flex justify-between text-[7px] font-mono text-gray-500 uppercase tracking-widest">
+                    <span>Low</span>
+                    <span>Mod</span>
+                    <span>High / Wear</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -498,6 +645,50 @@ export default function FleetModule({ vehicles, onTriggerRerouting }: FleetModul
                       strokeDasharray="4 4"
                       className="transition-all"
                     />
+                  );
+                })}
+
+                {/* Fuel Heatmap Glow Rings for Abstract View */}
+                {showFuelHeatmap && vehicles.filter(v => v.status === 'in_transit').map(v => {
+                  const { x, y } = getAnimatedPos(v);
+                  const fuel = v.fuelConsumptionRate || 0;
+                  const engineHealth = v.engineHealth || 100;
+                  const engineStrain = (100 - engineHealth) / 100;
+                  const intensity = Math.min(1.5, (fuel / 42) * (1 + engineStrain)); // scale 0 to 1.5
+
+                  // Heatmap colors matching maplibregl color ramp
+                  let glowColor = 'rgba(6, 182, 212, 0.4)'; // low/mod = cyan
+                  if (intensity > 1.1) {
+                    glowColor = 'rgba(244, 63, 94, 0.8)'; // high/wear = rose
+                  } else if (intensity > 0.8) {
+                    glowColor = 'rgba(249, 115, 22, 0.75)'; // orange
+                  } else if (intensity > 0.5) {
+                    glowColor = 'rgba(245, 158, 11, 0.6)'; // amber
+                  } else if (intensity > 0.25) {
+                    glowColor = 'rgba(16, 185, 129, 0.5)'; // emerald
+                  }
+
+                  const radius = 10 + intensity * 25; // radius ranges from 10 to 45px depending on load
+
+                  return (
+                    <g key={`heatmap-svg-${v.id}`} className="pointer-events-none mix-blend-screen">
+                      <circle
+                        cx={x}
+                        cy={y}
+                        r={radius}
+                        fill={glowColor}
+                        opacity={0.35 * intensity}
+                        style={{ filter: 'blur(8px)' }}
+                      />
+                      <circle
+                        cx={x}
+                        cy={y}
+                        r={radius * 0.5}
+                        fill={glowColor}
+                        opacity={0.5 * intensity}
+                        style={{ filter: 'blur(4px)' }}
+                      />
+                    </g>
                   );
                 })}
 

@@ -18,8 +18,8 @@ import {
 export const EMPLOYEES: Employee[] = [
   {
     id: 'emp-1',
-    name: 'Abrar Ishraq',
-    email: 'abrar.ishraq@supplynova.com',
+    name: 'SMI Fahim',
+    email: 'smi.fahim@supplynova.com',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     role: 'Super Admin',
     department: 'Executive',

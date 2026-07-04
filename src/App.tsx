@@ -29,7 +29,7 @@ import {
 import { Employee, PurchaseOrder, RFQ, Warehouse, Vehicle, Alert, FinancialRecord, BeatPlan } from './types';
 
 export default function App() {
-  // Impersonated Employee State (defaults to CEO/Super Admin Abrar Ishraq)
+  // Impersonated Employee State (defaults to CEO/Super Admin SMI Fahim)
   const [currentEmployee, setCurrentEmployee] = useState<Employee>(EMPLOYEES[0]);
 
   // Dynamic SCM Database States

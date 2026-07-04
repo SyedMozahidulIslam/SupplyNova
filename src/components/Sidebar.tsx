@@ -61,14 +61,23 @@ export default function Sidebar({
       {/* Brand Header */}
       <div className="p-6 border-b border-white/10 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-accent-blue rounded flex items-center justify-center shrink-0">
-            <span className="font-black text-white text-sm">SN</span>
+          <div className="relative w-9 h-9 flex items-center justify-center shrink-0">
+            {/* Pulsing glow background */}
+            <div className="absolute inset-0 bg-accent-blue/20 rounded-lg blur-sm animate-pulse" />
+            {/* Elegant stylized layered SCM logo */}
+            <div className="relative w-8 h-8 bg-gradient-to-br from-accent-blue via-blue-600 to-blue-900 rounded border border-white/20 flex items-center justify-center shadow-lg transform rotate-3 hover:rotate-12 hover:scale-105 transition-all duration-300">
+              <svg className="w-4.5 h-4.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                <path d="M2 17l10 5 10-5" />
+                <path d="M2 12l10 5 10-5" />
+              </svg>
+            </div>
           </div>
           <div>
-            <h1 className="text-lg font-bold tracking-tighter uppercase italic text-white leading-none">
+            <h1 className="text-base font-black tracking-tight uppercase text-white leading-none">
               SupplyNova
             </h1>
-            <p className="text-[9px] font-bold tracking-widest text-gray-500 uppercase mt-1">Enterprise SCM</p>
+            <p className="text-[8px] font-black tracking-widest text-accent-cyan uppercase mt-1">Smart Supply App</p>
           </div>
         </div>
         <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-accent-blue/10 border border-accent-blue/20 text-[9px] font-black uppercase tracking-wider text-accent-blue animate-pulse">
