@@ -1,0 +1,6 @@
+{
+  "name": "SupplyNova",
+  "description": "Enterprise Supply Chain & Logistics Management Platform with real-time tracking, AI-driven decision intelligence, and cold chain monitoring.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
