@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as echarts from 'echarts';
+import { jsPDF } from 'jspdf';
 import { 
   Leaf, 
   Trees, 
@@ -555,14 +556,621 @@ export default function SustainabilityModule({
     setEditingSupplierId(null);
   };
 
-  // Simulated Report Exporter
+  // Simulated Report Exporter with High-Fidelity PDF and CSV Spreadsheet download
   const handleExportReport = () => {
     setIsExporting(true);
     setExportCompleteMessage(null);
+    
     setTimeout(() => {
-      setIsExporting(false);
-      setExportCompleteMessage(`Successfully generated ${selectedReportType.toUpperCase()} REPORT for ${selectedReportQuarter}. Download completed: SupplyNova_ESG_${selectedReportQuarter.replace(' ', '_')}.${selectedReportType === 'executive' ? 'pdf' : 'xlsx'} (Corporate Digital Certified Signature Attached)`);
-    }, 2000);
+      try {
+        const currentDateStr = new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' }) + ' BDT';
+        const formattedQuarter = selectedReportQuarter.replace(' ', '_');
+        
+        if (selectedReportType === 'executive' || selectedReportType === 'fleet' || selectedReportType === 'supplier') {
+          const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+          
+          if (selectedReportType === 'executive') {
+            // --- 1. EXECUTIVE SUSTAINABILITY REPORT (PDF) ---
+            // Draw elegant corporate background/borders
+            doc.setFillColor(248, 250, 252); // soft cool grey
+            doc.rect(0, 0, 210, 297, 'F');
+            
+            // Draw primary header banner
+            doc.setFillColor(15, 23, 42); // slate-900
+            doc.rect(0, 0, 210, 42, 'F');
+            
+            // Brand Accents
+            doc.setFillColor(16, 185, 129); // emerald-500
+            doc.rect(0, 42, 210, 3, 'F');
+            
+            // Title
+            doc.setTextColor(255, 255, 255);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(22);
+            doc.text('SUPPLYNOVA', 15, 20);
+            
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(148, 163, 184); // slate-400
+            doc.text('INTELLIGENT SUPPLY CHAIN ESG COMMAND CENTRE', 15, 26);
+            
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(11);
+            doc.setTextColor(6, 182, 212); // cyan-500
+            doc.text('EXECUTIVE SUSTAINABILITY DISCLOSURE', 15, 34);
+            
+            // Header right metadata
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(8);
+            doc.setFont('courier', 'bold');
+            doc.text(`REF: SN-ESG-${selectedReportQuarter.replace(' ', '')}-EXEC`, 195, 16, { align: 'right' });
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(148, 163, 184);
+            doc.text(`CONFIDENTIAL RECORD`, 195, 21, { align: 'right' });
+            doc.text(`Bangla-SLA Compliant`, 195, 26, { align: 'right' });
+            
+            // Main Body Content
+            let y = 60;
+            doc.setTextColor(15, 23, 42);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(14);
+            doc.text(`CORPORATE DISCLOSURE STATEMENT: ${selectedReportQuarter}`, 15, y);
+            
+            y += 4;
+            doc.setDrawColor(203, 213, 225); // slate-300
+            doc.setLineWidth(0.5);
+            doc.line(15, y, 195, y);
+            
+            y += 8;
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.setTextColor(71, 85, 105); // slate-600
+            doc.text([
+              `This certified report outlines the Scope 1, Scope 2, and Scope 3 environmental indicators and ESG KPIs for SupplyNova logistics networks during the period of ${selectedReportQuarter}.`,
+              `Auditing processes are synchronized with ISO 14064 criteria and vetted by regional regulatory compliance standards. Electronic records are sealed and secured in corporate registries.`
+            ], 15, y, { maxWidth: 180 });
+            
+            y += 16;
+            // Subheader: Key Performance Indicators
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(11);
+            doc.setTextColor(15, 23, 42);
+            doc.text('I. CORE ESG METRICS & CARBON APPORTIONMENT', 15, y);
+            
+            y += 3;
+            doc.line(15, y, 195, y);
+            
+            // KPI Table
+            y += 6;
+            const kpis = [
+              { label: 'Scope 1 - Direct Diesel Fleet Emissions', val: `${totalFleetEmissionsThisMonth.toFixed(1)} Metric Tons CO2`, desc: 'Real-time telemetry tracked fuel burn' },
+              { label: 'Scope 2 - Indirect Facility Power Grid', val: `${(electricityUsedThisMonth * 0.64 / 1000).toFixed(1)} Metric Tons CO2`, desc: 'Based on 28,450 kWh regional draw' },
+              { label: 'Scope 3 - Logistics Value Chain Overhead', val: '12.8 Metric Tons CO2', desc: 'Partner carrier & package manufacturing' },
+              { label: 'Overall ESG Corporate Compliance Index', val: `${esgComplianceScore}%`, desc: 'ISO 14061 Rating: PLATINUM CLASS' },
+              { label: 'Green Deliveries (Electric Carrier Ratio)', val: `${greenDeliveriesRatio}%`, desc: 'SLA target boundary: 80.0%' },
+              { label: 'Total Environment Carbon Offsets Avoided', val: `${currentAvoidedCarbon} Tons CO2`, desc: 'Smart routing algorithms applied' },
+              { label: 'National Forestation Equivalence', val: `${treesSaved} Saved Trees`, desc: 'Active ecological remediation support' }
+            ];
+            
+            kpis.forEach(k => {
+              // Draw a light background cell
+              doc.setFillColor(255, 255, 255);
+              doc.rect(15, y, 180, 8, 'F');
+              doc.setDrawColor(241, 245, 249);
+              doc.rect(15, y, 180, 8, 'S');
+              
+              doc.setFont('helvetica', 'bold');
+              doc.setFontSize(8);
+              doc.setTextColor(30, 41, 59); // slate-800
+              doc.text(k.label, 18, y + 5);
+              
+              doc.setFont('courier', 'bold');
+              doc.setTextColor(16, 185, 129); // emerald-500
+              doc.text(k.val, 115, y + 5);
+              
+              doc.setFont('helvetica', 'italic');
+              doc.setFontSize(7);
+              doc.setTextColor(100, 116, 139); // slate-500
+              doc.text(k.desc, 155, y + 5);
+              
+              y += 9;
+            });
+            
+            y += 4;
+            
+            // Section II: AI Executive CSO Briefing
+            if (includeAISummary) {
+              doc.setFont('helvetica', 'bold');
+              doc.setFontSize(11);
+              doc.setTextColor(15, 23, 42);
+              doc.text('II. CHIEF SUSTAINABILITY OFFICER (CSO) AI BRIEFING', 15, y);
+              
+              y += 3;
+              doc.setDrawColor(203, 213, 225);
+              doc.line(15, y, 195, y);
+              
+              y += 6;
+              // Draw soft callout box
+              doc.setFillColor(240, 253, 250); // teal-50
+              doc.setDrawColor(204, 251, 241); // teal-100
+              doc.rect(15, y, 180, 22, 'FD');
+              
+              doc.setFont('helvetica', 'italic');
+              doc.setFontSize(8.5);
+              doc.setTextColor(13, 148, 136); // teal-600
+              const briefLines = [
+                `"SupplyNova AI CSO Agent continuously logs active dispatch records. High-frequency corridor analysis on the N1 highway indicates the successful integration of green electric carriers, elevating our green deliveries ratio to ${greenDeliveriesRatio}%. Dynamic warehouse HVAC calibration reclaimed an additional 18.4 kW at Dhaka mega-Hub, optimizing our carbon-to-revenue ratio by 14% over prior quarters."`
+              ];
+              doc.text(briefLines, 18, y + 6, { maxWidth: 174 });
+              
+              y += 28;
+            }
+            
+            // Section III: Digital Certification & Stamp
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(11);
+            doc.setTextColor(15, 23, 42);
+            doc.text('III. DISCLOSURE CERTIFICATION & ASSURANCE', 15, y);
+            
+            y += 3;
+            doc.line(15, y, 195, y);
+            
+            y += 6;
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.setTextColor(100, 116, 139);
+            doc.text('Under the SEC directives for carbon disclosure reporting and corporate social responsibility standards, we hereby certify that the measurements detailed in this digital ledger represent a true and audited assessment of our physical footprints.', 15, y, { maxWidth: 130 });
+            
+            // Draw barcode/certified stamp placeholder
+            doc.setFillColor(15, 23, 42);
+            doc.rect(155, y, 40, 15, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFont('courier', 'bold');
+            doc.setFontSize(7);
+            doc.text('SEC COMPLIANT', 175, y + 6, { align: 'center' });
+            doc.text('SN-CERT-VERIFIED', 175, y + 10, { align: 'center' });
+            
+            // Draw digital signature lines
+            y += 25;
+            doc.setDrawColor(203, 213, 225);
+            doc.line(15, y, 65, y);
+            doc.line(80, y, 130, y);
+            
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(8);
+            doc.setTextColor(30, 41, 59);
+            doc.text('A.K. Khan, Executive Director', 15, y + 4);
+            doc.text('SupplyNova Audit Advisory Board', 15, y + 8);
+            
+            doc.text('CSO AI Compliance Officer', 80, y + 4);
+            doc.text('Cryptographically Verified', 80, y + 8);
+            
+            // Footer
+            doc.setDrawColor(203, 213, 225);
+            doc.line(15, 280, 195, 280);
+            
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7);
+            doc.setTextColor(148, 163, 184);
+            doc.text(`CONFIDENTIAL SUSTAINABILITY DISCLOSURE - PRINTED ON ${currentDateStr}`, 15, 285);
+            doc.text('Page 1 of 1', 195, 285, { align: 'right' });
+            
+            doc.save(`SupplyNova_Executive_Sustainability_${formattedQuarter}.pdf`);
+            
+          } else if (selectedReportType === 'fleet') {
+            // --- 2. FLEET SUSTAINABILITY SLA REPORT (PDF) ---
+            doc.setFillColor(248, 250, 252);
+            doc.rect(0, 0, 210, 297, 'F');
+            
+            doc.setFillColor(15, 23, 42); // slate-900
+            doc.rect(0, 0, 210, 42, 'F');
+            
+            doc.setFillColor(6, 182, 212); // cyan-500
+            doc.rect(0, 42, 210, 3, 'F');
+            
+            doc.setTextColor(255, 255, 255);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(20);
+            doc.text('SUPPLYNOVA', 15, 20);
+            
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(148, 163, 184);
+            doc.text('FLEET EMISSIONS & ECO-ROUTING COMPLIANCE REPORT', 15, 26);
+            
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(11);
+            doc.setTextColor(16, 185, 129); // emerald-500
+            doc.text('TIER-1 ENVIRONMENTAL RETAIL SLA AUDIT', 15, 34);
+            
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(8);
+            doc.setFont('courier', 'bold');
+            doc.text(`REF: SN-FLEET-${selectedReportQuarter.replace(' ', '')}`, 195, 16, { align: 'right' });
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(148, 163, 184);
+            doc.text(`Audit Period: ${selectedReportQuarter}`, 195, 21, { align: 'right' });
+            
+            let y = 60;
+            doc.setTextColor(15, 23, 42);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(13);
+            doc.text('I. FLEET DECARBONIZATION SUMMARY', 15, y);
+            
+            y += 3;
+            doc.setDrawColor(203, 213, 225);
+            doc.line(15, y, 195, y);
+            
+            y += 8;
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8.5);
+            doc.setTextColor(71, 85, 105);
+            doc.text([
+              `SupplyNova operates a hybrid transit fleet consisting of both traditional internal combustion engine (ICE) heavy rigs and modern electric transit carriers (EVs).`,
+              `The environmental SLA targets are bound to a minimum of 80.0% Green Deliveries and a Scope 1 fleet emission intensity below 1.2 kg CO2 per kilometer.`,
+            ], 15, y, { maxWidth: 180 });
+            
+            y += 14;
+            const boxes = [
+              { label: 'TOTAL FLEET VEHICLES', val: `${vehicles.length} Units` },
+              { label: 'ACTIVE IN TRANSIT', val: `${activeTransitVehicles.length} Units` },
+              { label: 'GREEN DELIVERY RATIO', val: `${greenDeliveriesRatio}%` },
+              { label: 'FLEET EMISSIONS (MO)', val: `${totalFleetEmissionsThisMonth.toFixed(1)} Tons CO2` }
+            ];
+            
+            boxes.forEach((b, idx) => {
+              const bx = 15 + idx * 46;
+              doc.setFillColor(255, 255, 255);
+              doc.rect(bx, y, 42, 16, 'F');
+              doc.setDrawColor(226, 232, 240);
+              doc.rect(bx, y, 42, 16, 'S');
+              
+              doc.setFont('helvetica', 'bold');
+              doc.setFontSize(6.5);
+              doc.setTextColor(100, 116, 139);
+              doc.text(b.label, bx + 3, y + 5);
+              
+              doc.setFont('helvetica', 'black');
+              doc.setFontSize(10.5);
+              doc.setTextColor(15, 23, 42);
+              doc.text(b.val, bx + 3, y + 12);
+            });
+            
+            y += 24;
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(11);
+            doc.setTextColor(15, 23, 42);
+            doc.text('II. INDIVIDUAL VEHICLE PERFORMANCE & TELEMETRY LEDGER', 15, y);
+            
+            y += 3;
+            doc.line(15, y, 195, y);
+            
+            y += 6;
+            doc.setFillColor(30, 41, 59); // slate-800
+            doc.rect(15, y, 180, 7, 'F');
+            
+            doc.setTextColor(255, 255, 255);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(7.5);
+            doc.text('Plate Number', 18, y + 5);
+            doc.text('Type', 55, y + 5);
+            doc.text('Status', 85, y + 5);
+            doc.text('Fuel Rate', 115, y + 5);
+            doc.text('Dest. City', 145, y + 5);
+            doc.text('Est. Carbon', 175, y + 5);
+            
+            y += 7;
+            const displayVehicles = vehicles.slice(0, 12);
+            displayVehicles.forEach((v, idx) => {
+              doc.setFillColor(idx % 2 === 0 ? 255 : 241, idx % 2 === 0 ? 255 : 245, idx % 2 === 0 ? 255 : 249);
+              doc.rect(15, y, 180, 7, 'F');
+              doc.setDrawColor(241, 245, 249);
+              doc.rect(15, y, 180, 7, 'S');
+              
+              doc.setFont('helvetica', 'normal');
+              doc.setFontSize(7);
+              doc.setTextColor(15, 23, 42);
+              doc.text(v.plateNumber, 18, y + 5);
+              doc.text(v.type, 55, y + 5);
+              doc.text(v.status.toUpperCase(), 85, y + 5);
+              doc.text(`${v.fuelConsumptionRate || 15} L/100km`, 115, y + 5);
+              doc.text(v.destination || 'N/A', 145, y + 5);
+              
+              const emissions = (((v.fuelConsumptionRate || 15) * 2.68) * 0.1).toFixed(2);
+              doc.setFont('courier', 'bold');
+              doc.setTextColor(15, 23, 42);
+              doc.text(`${emissions} kg/km`, 175, y + 5);
+              
+              y += 7;
+            });
+            
+            y += 10;
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(11);
+            doc.setTextColor(15, 23, 42);
+            doc.text('III. ENVIRONMENT FLEET TELEMETRY ALERTS FILED', 15, y);
+            
+            y += 3;
+            doc.line(15, y, 195, y);
+            
+            y += 6;
+            const activeAlerts = sustainabilityAlerts.filter(a => a.type === 'vehicle' && !a.actionTaken);
+            if (activeAlerts.length === 0) {
+              doc.setFont('helvetica', 'italic');
+              doc.setFontSize(8);
+              doc.setTextColor(16, 185, 129);
+              doc.text('No active fleet emissions alerts. All vehicles running within acceptable carbon threshold limits.', 15, y);
+            } else {
+              activeAlerts.forEach((a) => {
+                doc.setFillColor(254, 242, 242);
+                doc.setDrawColor(254, 226, 226);
+                doc.rect(15, y, 180, 10, 'FD');
+                
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(7.5);
+                doc.setTextColor(185, 28, 28);
+                doc.text(`[CRITICAL DEVIATION] ${a.title}`, 18, y + 4);
+                
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(6.5);
+                doc.setTextColor(127, 29, 29);
+                doc.text(a.desc, 18, y + 8, { maxWidth: 174 });
+                
+                y += 12;
+              });
+            }
+            
+            // Footer
+            doc.setDrawColor(203, 213, 225);
+            doc.line(15, 280, 195, 280);
+            
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7);
+            doc.setTextColor(148, 163, 184);
+            doc.text(`CONFIDENTIAL FLEET SLA REPORT - GENERATED ON ${currentDateStr}`, 15, 285);
+            doc.text('Page 1 of 1', 195, 285, { align: 'right' });
+            
+            doc.save(`SupplyNova_Fleet_SLA_Disclosure_${formattedQuarter}.pdf`);
+            
+          } else if (selectedReportType === 'supplier') {
+            // --- 3. SUPPLIER ESG VENDOR COMPLIANCE AUDIT (PDF) ---
+            doc.setFillColor(248, 250, 252);
+            doc.rect(0, 0, 210, 297, 'F');
+            
+            doc.setFillColor(15, 23, 42);
+            doc.rect(0, 0, 210, 42, 'F');
+            
+            doc.setFillColor(245, 158, 11); // amber-500
+            doc.rect(0, 42, 210, 3, 'F');
+            
+            doc.setTextColor(255, 255, 255);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(20);
+            doc.text('SUPPLYNOVA', 15, 20);
+            
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(148, 163, 184);
+            doc.text('SUPPLIER ESG VENDOR COMPLIANCE & ETHICAL PROCUREMENT REGISTER', 15, 26);
+            
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(11);
+            doc.setTextColor(245, 158, 11);
+            doc.text('SUPPLY CHAIN SCOPE 3 CARBON INTENSITY CERTIFICATION', 15, 34);
+            
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(8);
+            doc.setFont('courier', 'bold');
+            doc.text(`REF: SN-SUPP-${selectedReportQuarter.replace(' ', '')}`, 195, 16, { align: 'right' });
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(148, 163, 184);
+            doc.text(`Audit Period: ${selectedReportQuarter}`, 195, 21, { align: 'right' });
+            
+            let y = 60;
+            doc.setTextColor(15, 23, 42);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(13);
+            doc.text('I. SCOPE 3 VALUE CHAIN AUDITING METHODOLOGY', 15, y);
+            
+            y += 3;
+            doc.setDrawColor(203, 213, 225);
+            doc.line(15, y, 195, y);
+            
+            y += 8;
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8.5);
+            doc.setTextColor(71, 85, 105);
+            doc.text([
+              `Scope 3 emissions accounts for carbon generated by external packaging hubs and third-party freight contractors.`,
+              `SupplyNova enforces an ESG Vendor Sourcing Clause requiring all partner vendors to sustain an ESG Performance rating above 70 pts, and package recyclability above 60%.`,
+            ], 15, y, { maxWidth: 180 });
+            
+            y += 14;
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(11);
+            doc.setTextColor(15, 23, 42);
+            doc.text('II. REGISTERED VENDOR COMPLIANCE SCORECARD', 15, y);
+            
+            y += 3;
+            doc.line(15, y, 195, y);
+            
+            y += 6;
+            doc.setFillColor(30, 41, 59); // slate-800
+            doc.rect(15, y, 180, 7, 'F');
+            
+            doc.setTextColor(255, 255, 255);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(7.5);
+            doc.text('Supplier/Vendor Name', 18, y + 5);
+            doc.text('Service Category', 65, y + 5);
+            doc.text('ESG Rating', 110, y + 5);
+            doc.text('Carbon Intensity', 135, y + 5);
+            doc.text('Recyclability', 165, y + 5);
+            doc.text('Ethical Status', 182, y + 5, { align: 'right' });
+            
+            y += 7;
+            suppliers.forEach((s, idx) => {
+              doc.setFillColor(idx % 2 === 0 ? 255 : 241, idx % 2 === 0 ? 255 : 245, idx % 2 === 0 ? 255 : 249);
+              doc.rect(15, y, 180, 7, 'F');
+              doc.setDrawColor(241, 245, 249);
+              doc.rect(15, y, 180, 7, 'S');
+              
+              doc.setFont('helvetica', 'normal');
+              doc.setFontSize(7);
+              doc.setTextColor(15, 23, 42);
+              doc.text(s.name, 18, y + 5);
+              doc.text(s.category, 65, y + 5);
+              
+              doc.setFont('helvetica', 'bold');
+              if (s.esgScore >= 80) doc.setTextColor(16, 185, 129);
+              else if (s.esgScore >= 60) doc.setTextColor(245, 158, 11);
+              else doc.setTextColor(239, 68, 68);
+              doc.text(`${s.esgScore} / 100`, 110, y + 5);
+              
+              doc.setFont('helvetica', 'normal');
+              doc.setTextColor(71, 85, 105);
+              doc.text(s.carbonIntensity, 135, y + 5);
+              doc.text(`${s.packagingRecyclable}%`, 165, y + 5);
+              
+              doc.setFont('helvetica', 'bold');
+              doc.text(s.ethicalRating, 192, y + 5, { align: 'right' });
+              
+              y += 7;
+            });
+            
+            y += 12;
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(11);
+            doc.setTextColor(15, 23, 42);
+            doc.text('III. CHIEF PROCUREMENT OFFICER (CPO) AI ACTION RECOMMENDATIONS', 15, y);
+            
+            y += 3;
+            doc.line(15, y, 195, y);
+            
+            y += 6;
+            doc.setFillColor(254, 251, 236);
+            doc.setDrawColor(254, 243, 199);
+            doc.rect(15, y, 180, 20, 'FD');
+            
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(7.5);
+            doc.setTextColor(180, 83, 9);
+            doc.text('[OPPORTUNITY] SUPPLIER COMPLIANCE OPTIMIZATION ROUTINE', 18, y + 5);
+            
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7);
+            doc.setTextColor(146, 64, 14);
+            doc.text([
+              `1. Bengal Polychem Ltd (ESG rating: 68) remains the primary bottleneck. Recommend shifting 25% allocation to Desh Green Carton Hub.`,
+              `2. Meghna Carrier Services is below standard threshold at 54 pts. Initiate 30-day compliance remediation audit under clause 4.2.`
+            ], 18, y + 10, { maxWidth: 174 });
+            
+            // Footer
+            doc.setDrawColor(203, 213, 225);
+            doc.line(15, 280, 195, 280);
+            
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7);
+            doc.setTextColor(148, 163, 184);
+            doc.text(`CONFIDENTIAL SUPPLIER PROCUREMENT AUDIT - GENERATED ON ${currentDateStr}`, 15, 285);
+            doc.text('Page 1 of 1', 195, 285, { align: 'right' });
+            
+            doc.save(`SupplyNova_Supplier_ESG_Audit_${formattedQuarter}.pdf`);
+          }
+          
+        } else if (selectedReportType === 'carbon') {
+          // --- 4. DETAILED CARBON EMISSIONS AUDIT (Excel/CSV) ---
+          const scope1 = totalFleetEmissionsThisMonth;
+          const scope2 = Number((electricityUsedThisMonth * 0.64 / 1000).toFixed(2));
+          const scope3 = 12.8;
+          const totalEmissions = Number((scope1 + scope2 + scope3).toFixed(2));
+          
+          let csv = `"SupplyNova Corporate ESG & Carbon Disclosure Ledger"\n`;
+          csv += `"Reporting Period","${selectedReportQuarter}"\n`;
+          csv += `"Document Reference","SN-ESG-2026-CARB"\n`;
+          csv += `"Audit Protocol Standard","ISO 14064-1:2018 Specification"\n`;
+          csv += `"Registry Generation Time","${currentDateStr}"\n\n`;
+          
+          csv += `"Scope Category","Emission Source Sector","Measured Activity Data","Activity Unit","Scope Identifier","Emission Conversion Factor","Carbon Equivalent (Tons CO2)","SLA Boundary State"\n`;
+          csv += `"Direct Emissions","Diesel Freight Fleet","${fuelConsumptionThisMonth}","Liters","Scope 1","2.68 kg CO2 / Liter","${scope1.toFixed(2)}","COMPLIANT"\n`;
+          csv += `"Indirect Energy Emissions","Warehouse Power Grid","${electricityUsedThisMonth}","kWh","Scope 2","0.64 kg CO2 / kWh","${scope2.toFixed(2)}","COMPLIANT"\n`;
+          csv += `"Value Chain Emissions","3PL Partner Logistics","80","Tons Cargo","Scope 3","0.15 kg CO2 / Ton-KM","12.80","COMPLIANT"\n`;
+          csv += `"Direct Emissions","HVAC & Facility Generators","9.5","Tons","Scope 1","Activity Default","9.50","OPTIMIZATION RECOMMENDED"\n`;
+          csv += `"Value Chain Emissions","Packaging Waste Overhead","${wasteGeneratedThisMonth}","kg","Scope 3","0.04 kg CO2 / kg","5.00","WARN"\n\n`;
+          
+          csv += `"DECISION LEDGER SUMMARY STATS"\n`;
+          csv += `"Metric KPI Indicator Name","Value Registered","KPI Unit","Compliance Vetting State"\n`;
+          csv += `"Total Registered Carbon Footprint","${totalEmissions}","Metric Tons CO2","PASSED AUDIT"\n`;
+          csv += `"Avoided Carbon via EV Route Optimization","${currentAvoidedCarbon}","Metric Tons CO2","SLA SATISFIED"\n`;
+          csv += `"Equivalent Forest Trees Planted","${treesSaved}","Saved Trees","ECOLOGICAL RECLAIM ACTIVE"\n`;
+          csv += `"Overall Supply Chain ESG Compliance Index","${esgComplianceScore}%","Overall Compliance Score","PLATINUM CLASS APPROVED"\n`;
+          csv += `"Green Deliveries Carrier Ratio","${greenDeliveriesRatio}%","Active Fleet Ratio","EXCEEDS MANDATE"\n`;
+          
+          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          const link = document.createElement("a");
+          link.href = URL.createObjectURL(blob);
+          link.setAttribute("download", `SupplyNova_Carbon_Audit_${formattedQuarter}.csv`);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+        } else if (selectedReportType === 'warehouse') {
+          // --- 5. FACILITY ENERGY AUDIT LEDGER (Excel/CSV) ---
+          let csv = `"SupplyNova AI Energy Auditor Remediation Ledger"\n`;
+          csv += `"Audit Execution Date","${currentDateStr}"\n`;
+          csv += `"Reporting Segment","Facility Power & Calibration Optimization"\n`;
+          csv += `"Audit Standard Compliance","ISO 50001:2018 Energy Management Systems"\n\n`;
+          
+          csv += `"Facility ID","Warehouse Location Name","Operational Sub-System","Anomaly / Issue Identified","Technical Anomaly Description","Remedy Action Executed/Recommended","Power Waste Rate (kW)","Est. Monthly Financial Loss (BDT)","Audit Status"\n`;
+          
+          auditIssues.forEach(issue => {
+            const row = [
+              issue.warehouseId,
+              issue.warehouseName,
+              issue.type.toUpperCase(),
+              issue.title,
+              issue.description,
+              issue.remedy,
+              issue.powerWasteKw,
+              issue.estCostSavingBdt,
+              issue.isResolved ? "RESOLVED & OPTIMIZED" : "UNRESOLVED - REMEDIATION REQUIRED"
+            ];
+            
+            const csvRow = row.map(v => {
+              const strVal = typeof v === 'number' ? v.toString() : v;
+              return `"${strVal.replace(/"/g, '""')}"`;
+            }).join(',');
+            
+            csv += csvRow + '\n';
+          });
+          
+          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          const link = document.createElement("a");
+          link.href = URL.createObjectURL(blob);
+          link.setAttribute("download", `SupplyNova_Facility_Energy_Ledger_${formattedQuarter}.csv`);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+        
+        setIsExporting(false);
+        setExportCompleteMessage(`Successfully generated ${selectedReportType.toUpperCase()} REPORT for ${selectedReportQuarter}. Download completed: SupplyNova_ESG_${selectedReportQuarter.replace(' ', '_')}.${selectedReportType === 'executive' || selectedReportType === 'fleet' || selectedReportType === 'supplier' ? 'pdf' : 'csv'} (Corporate Digital Certified Signature & Stamp Embedded)`);
+        
+        if (onAddAuditLog) {
+          onAddAuditLog(
+            'approve',
+            'sustainability',
+            `Exported Certified ESG Disclosure Report: ${selectedReportType.toUpperCase()} for target period ${selectedReportQuarter}. Download triggered successfully.`,
+            'low'
+          );
+        }
+        
+      } catch (err) {
+        console.error("Error generating report", err);
+        setIsExporting(false);
+        setExportCompleteMessage("Error occurred during document compilation. Check console logs.");
+      }
+    }, 1200);
   };
 
   return (

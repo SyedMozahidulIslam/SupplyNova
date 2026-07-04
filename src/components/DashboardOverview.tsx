@@ -221,7 +221,7 @@ export default function DashboardOverview({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Real-time Telemetry & Map Heatmap Control Center */}
         <div className="lg:col-span-2">
-          <ScmEChartsPanel vehicles={vehicles} />
+          <ScmEChartsPanel vehicles={vehicles} warehouses={warehouses} />
         </div>
 
         {/* Warehouse Stock distribution */}

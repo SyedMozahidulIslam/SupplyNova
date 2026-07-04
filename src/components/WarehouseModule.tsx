@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Package,
   Layers,
@@ -19,7 +19,11 @@ import {
   Check,
   AlertCircle,
   ArrowRight,
-  Clock
+  Clock,
+  Power,
+  Lightbulb,
+  Leaf,
+  Activity
 } from 'lucide-react';
 import {
   BarChart,
@@ -30,7 +34,11 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  Cell
+  Cell,
+  AreaChart,
+  Area,
+  LineChart,
+  Line
 } from 'recharts';
 import { Warehouse, Product } from '../types';
 import { WAREHOUSES, PRODUCTS } from '../data/mockData';
@@ -57,13 +65,125 @@ export default function WarehouseModule({
 }: WarehouseModuleProps) {
   const [selectedWarehouseId, setSelectedWarehouseId] = useState('wh-1');
   const [products, setProducts] = useState<Product[]>(PRODUCTS);
-  const [activeSubTab, setActiveSubTab] = useState<'layout' | 'audit' | 'damage' | 'aging'>('layout');
+  const [activeSubTab, setActiveSubTab] = useState<'layout' | 'audit' | 'damage' | 'aging' | 'energy'>('layout');
   const [selectedRack, setSelectedRack] = useState<any>(null);
 
   // Liquidation engine states
   const [activeLiquidationSku, setActiveLiquidationSku] = useState<string | null>(null);
   const [clearedLiquidationSkus, setClearedLiquidationSkus] = useState<string[]>([]);
   const [liquidationProgress, setLiquidationProgress] = useState(0);
+
+  // AI Energy Auditor state variables
+  const [lightingEco, setLightingEco] = useState(false);
+  const [hvacEco, setHvacEco] = useState(false);
+  const [coldEco, setColdEco] = useState(false);
+  const [isShedding, setIsShedding] = useState(false);
+  const [sheddingProgress, setSheddingProgress] = useState(0);
+  const [sheddingStepText, setSheddingStepText] = useState('');
+  const [energyAuditLogs, setEnergyAuditLogs] = useState<string[]>([
+    `[Telemetry] Connected to Core Utility Smart Meter WH-M01. Operational grid handshake stable.`,
+    `[Advisory] Automated HVAC cooling cycle balanced in response to regional thermal drift.`,
+    `[Status] Idle rack lighting rows set to passive occupancy trigger.`
+  ]);
+  const [meterFluctuation, setMeterFluctuation] = useState(0);
+  const [cumulativeKwh, setCumulativeKwh] = useState(1482.4);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setMeterFluctuation((Math.random() - 0.5) * 0.6);
+      setCumulativeKwh(prev => prev + 0.032);
+    }, 2000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const activeWarehouse = warehouses.find(w => w.id === selectedWarehouseId) || warehouses[0];
+
+  const handleOneClickOptimization = () => {
+    if (lightingEco && hvacEco && coldEco) {
+      // Restore standard operational parameters
+      setLightingEco(false);
+      setHvacEco(false);
+      setColdEco(false);
+      
+      const ts = new Date().toLocaleTimeString();
+      setEnergyAuditLogs(prev => [
+        `[${ts}] Override: Load-shedding sequence terminated by user. Restored default standard utility parameters.`,
+        ...prev
+      ]);
+
+      if (onAddAuditLog) {
+        onAddAuditLog(
+          'override',
+          'warehouse',
+          `De-activated power-load shedding sequence for ${activeWarehouse.name}. Returned grids to high-throughput baseline draw.`,
+          'low',
+          'Shedding state: ACTIVE_OPTIMIZED',
+          'Shedding state: STANDARD_OPERATION'
+        );
+      }
+      return;
+    }
+
+    setIsShedding(true);
+    setSheddingProgress(5);
+    setSheddingStepText("Pinging terminal sub-breakers & HVAC actuators...");
+
+    const steps = [
+      {
+        progress: 25,
+        text: "Pulsing dim signal to racks R1-R12... Dimmed auxiliary arrays by 30% (-5.4 kW).",
+        action: () => setLightingEco(true)
+      },
+      {
+        progress: 60,
+        text: "Recalibrating main chiller thermostat offsets to +1.5°C standby drift (-10.5 kW).",
+        action: () => setHvacEco(true)
+      },
+      {
+        progress: 85,
+        text: "Synchronizing cold-storage zone defrost compressors to skip high-rate billing slots (-3.5 kW).",
+        action: () => setColdEco(true)
+      },
+      {
+        progress: 100,
+        text: "Power-load shedding synchronized. Savings targets active!"
+      }
+    ];
+
+    let stepIdx = 0;
+    const interval = setInterval(() => {
+      if (stepIdx < steps.length) {
+        const step = steps[stepIdx];
+        setSheddingProgress(step.progress);
+        setSheddingStepText(step.text);
+        if (step.action) step.action();
+        
+        const ts = new Date().toLocaleTimeString();
+        setEnergyAuditLogs(prev => [
+          `[${ts}] Shed Sequencer: ${step.text}`,
+          ...prev
+        ]);
+        stepIdx++;
+      } else {
+        clearInterval(interval);
+        setTimeout(() => {
+          setIsShedding(false);
+          setSheddingProgress(0);
+
+          if (onAddAuditLog) {
+            onAddAuditLog(
+              'configure',
+              'warehouse',
+              `Executed AI Power-Load Shedding Sequence. Dimmed auxiliary lighting and calibrated HVAC standby thermostats to optimize thermal inertia at ${activeWarehouse.name}.`,
+              'medium',
+              'Utility State: Unoptimized Standard Grid Profile',
+              'Utility State: Power-Load Shedding Sequence Active (-19.4 kW)'
+            );
+          }
+        }, 800);
+      }
+    }, 800);
+  };
 
   const getProductAgingDistributionForCompleteness = (item: Product) => {
     const total = item.stockLevel;
@@ -190,7 +310,6 @@ export default function WarehouseModule({
   const [damageComment, setDamageComment] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  const activeWarehouse = warehouses.find(w => w.id === selectedWarehouseId) || warehouses[0];
   const warehouseProducts = products.filter(p => p.warehouseId === selectedWarehouseId);
 
   const getFillColor = (percent: number) => {
@@ -304,7 +423,7 @@ export default function WarehouseModule({
           <p className="text-xs text-gray-300 leading-relaxed mt-1">
             Track spatial allocations, verify ERP stock counts, file damage claims, or audit inventory aging profiles with AI remediation.
           </p>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mt-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mt-4">
             <button
               onClick={() => setActiveSubTab('layout')}
               className={`py-2 text-[10px] font-black uppercase tracking-widest rounded border text-center transition-all cursor-pointer ${
@@ -335,7 +454,16 @@ export default function WarehouseModule({
                 activeSubTab === 'aging' ? 'bg-accent-cyan border-accent-cyan text-black font-extrabold' : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'
               }`}
             >
-              Aging & AI Suggestions
+              Aging & AI
+            </button>
+            <button
+              onClick={() => setActiveSubTab('energy')}
+              className={`py-2 text-[10px] font-black uppercase tracking-widest rounded border text-center transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                activeSubTab === 'energy' ? 'bg-accent-cyan border-accent-cyan text-black font-extrabold' : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'
+              }`}
+            >
+              <Zap size={11} className={activeSubTab === 'energy' ? 'text-black' : 'text-accent-cyan animate-pulse'} />
+              Energy Auditor
             </button>
           </div>
         </div>

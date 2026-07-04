@@ -617,6 +617,7 @@ export default function App() {
               beatPlans={beatPlans}
               onTriggerCheckIn={handleTriggerCheckIn}
               onCollectOrder={handleCollectOrder}
+              onAddAuditLog={addAuditLog}
             />
           )}
 

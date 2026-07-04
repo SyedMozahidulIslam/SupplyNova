@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as echarts from 'echarts';
-import { Vehicle } from '../types';
-import { Activity, BarChart3, Map, Play, Pause, RefreshCw } from 'lucide-react';
+import { Vehicle, Warehouse, Outlet } from '../types';
+import { OUTLETS, WAREHOUSES } from '../data/mockData';
+import { Activity, BarChart3, Map, Play, Pause, RefreshCw, Layers } from 'lucide-react';
 
 interface ScmEChartsPanelProps {
   vehicles: Vehicle[];
+  warehouses?: Warehouse[];
 }
 
 interface HistoricalDataPoint {
@@ -14,8 +16,9 @@ interface HistoricalDataPoint {
   avgEngineHealth: number;
 }
 
-export default function ScmEChartsPanel({ vehicles }: ScmEChartsPanelProps) {
-  const [activeMode, setActiveMode] = useState<'line' | 'bar' | 'heatmap'>('line');
+export default function ScmEChartsPanel({ vehicles, warehouses = WAREHOUSES }: ScmEChartsPanelProps) {
+  const [activeMode, setActiveMode] = useState<'line' | 'bar' | 'heatmap' | 'executive'>('line');
+  const [executiveMetric, setExecutiveMetric] = useState<'combined' | 'efficiency' | 'carbon' | 'sales'>('combined');
   const [isLiveStream, setIsLiveStream] = useState(true);
   const [history, setHistory] = useState<HistoricalDataPoint[]>([]);
   
@@ -419,6 +422,181 @@ export default function ScmEChartsPanel({ vehicles }: ScmEChartsPanelProps) {
           },
         ],
       };
+    } else if (activeMode === 'executive') {
+      // --- EXECUTIVE HEATMAP OVERLAY ---
+      // Define regions with their geographical positions on the grid [0, 100]
+      const regions = [
+        { name: 'Dhaka Division (Central HQ)', key: 'Dhaka', coords: [50, 48], whId: 'wh-1', baseSales: 185 },
+        { name: 'Chittagong Division (Southeast Coast)', key: 'Chittagong', coords: [82, 20], whId: 'wh-2', baseSales: 125 },
+        { name: 'Sylhet Division (Northeast Tea Belt)', key: 'Sylhet', coords: [80, 80], whId: 'wh-3', baseSales: 62 },
+        { name: 'Bogra / Rajshahi (Northwest Agro)', key: 'Bogra', coords: [25, 78], whId: 'wh-4', baseSales: 88 },
+        { name: 'Jessore / Khulna (Southwest Trade)', key: 'Jessore', coords: [15, 32], whId: 'wh-5', baseSales: 74 },
+        { name: 'Comilla Node (Eastern Supply Corridor)', key: 'Comilla', coords: [68, 38], whId: null, baseSales: 45 },
+      ];
+
+      const regionData = regions.map(reg => {
+        // 1. Warehouse Efficiency
+        let efficiency = 95; // default for Comilla Node
+        if (reg.whId) {
+          const wh = warehouses.find(w => w.id === reg.whId);
+          if (wh) {
+            efficiency = Math.round(100 - (wh.activeIncidents * 15) - Math.abs(wh.filledPercent - 75) * 0.4);
+            efficiency = Math.max(40, Math.min(100, efficiency));
+          }
+        }
+
+        // 2. Fleet Carbon Impact (kg CO2 / hr)
+        // CO2 = fuel consumed (liters) * 2.68
+        const regionVehicles = vehicles.filter(v => 
+          v.status === 'in_transit' && 
+          (v.destination.toLowerCase().includes(reg.key.toLowerCase()) || 
+           v.plateNumber.toLowerCase().includes(reg.key.toLowerCase()))
+        );
+        const carbonRate = regionVehicles.reduce((sum, v) => {
+          const speed = v.currentSpeed || 50;
+          const rate = v.fuelConsumptionRate || 15;
+          const emissions = (rate * (speed / 100)) * 2.68; // kg CO2 / hour
+          return sum + emissions;
+        }, 0);
+
+        // 3. Sales Territory Performance (Lakh BDT / Month)
+        const regionOutlets = OUTLETS.filter(o => 
+          o.district.toLowerCase().includes(reg.key.toLowerCase()) || 
+          o.territory.toLowerCase().includes(reg.key.toLowerCase()) ||
+          o.location.toLowerCase().includes(reg.key.toLowerCase())
+        );
+        let salesTotal = regionOutlets.reduce((sum, o) => sum + o.monthlySalesBDT, 0) / 100000;
+        if (salesTotal === 0) {
+          salesTotal = reg.baseSales;
+        }
+
+        // 4. Combined Score
+        const salesScore = Math.min(100, (salesTotal / 200) * 100);
+        const carbonScore = Math.max(0, 100 - Math.min(100, (carbonRate / 60) * 100));
+        const combinedScore = (efficiency * 0.4) + (salesScore * 0.4) + (carbonScore * 0.2);
+
+        // Determine what value is used as the heat visualization metric
+        let primaryValue = combinedScore;
+        if (executiveMetric === 'efficiency') {
+          primaryValue = efficiency;
+        } else if (executiveMetric === 'carbon') {
+          primaryValue = carbonRate;
+        } else if (executiveMetric === 'sales') {
+          primaryValue = salesTotal;
+        }
+
+        return {
+          name: reg.name,
+          value: [reg.coords[0], reg.coords[1], Number(primaryValue.toFixed(1)), efficiency, Number(carbonRate.toFixed(1)), Number(salesTotal.toFixed(1)), Number(combinedScore.toFixed(1))]
+        };
+      });
+
+      let minVal = 0;
+      let maxVal = 100;
+      let colors = ['#f43f5e', '#3b82f6', '#10b981']; 
+      let labelFormatter = '{value}';
+
+      if (executiveMetric === 'combined') {
+        minVal = 50;
+        maxVal = 100;
+        colors = ['#f43f5e', '#f97316', '#f59e0b', '#3b82f6', '#10b981']; 
+        labelFormatter = '{value} pts';
+      } else if (executiveMetric === 'efficiency') {
+        minVal = 60;
+        maxVal = 100;
+        colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#10b981']; 
+        labelFormatter = '{value}%';
+      } else if (executiveMetric === 'carbon') {
+        minVal = 0;
+        maxVal = 50;
+        colors = ['#10b981', '#22c55e', '#eab308', '#f97316', '#ef4444']; 
+        labelFormatter = '{value} kg/h';
+      } else if (executiveMetric === 'sales') {
+        minVal = 0;
+        maxVal = 250;
+        colors = ['#475569', '#3b82f6', '#06b6d4', '#8b5cf6', '#d946ef']; 
+        labelFormatter = '৳{value}L';
+      }
+
+      option = {
+        backgroundColor: 'transparent',
+        title: {
+          text: `Executive Heatmap Overlay (${executiveMetric.toUpperCase()})`,
+          left: 'center',
+          textStyle: { color: '#ffffff', fontSize: 10, fontWeight: 'bold', fontFamily: 'monospace' },
+          top: 0,
+        },
+        tooltip: {
+          trigger: 'item',
+          backgroundColor: '#121214',
+          borderColor: 'rgba(255,255,255,0.1)',
+          formatter: (params: any) => {
+            const data = params.data;
+            if (!data) return '';
+            const val = data.value;
+            return `
+              <div style="font-family: monospace; font-size: 11px; padding: 6px; line-height: 1.5; color: #fff;">
+                <b style="color: #06b6d4; font-size: 13px;">${params.name}</b><br/>
+                <hr style="border-color: rgba(255,255,255,0.1); margin: 6px 0;" />
+                <span style="color: #10b981">● Warehouse Efficiency: <b>${val[3]}%</b></span><br/>
+                <span style="color: #ef4444">● Fleet Carbon Impact: <b>${val[4]} kg CO2/h</b></span><br/>
+                <span style="color: #d946ef">● Sales Performance: <b>৳${val[5]} Lakh/mo</b></span><br/>
+                <hr style="border-color: rgba(255,255,255,0.1); margin: 6px 0;" />
+                <span style="color: #f59e0b; font-weight: bold; font-size: 12px;">Combined Regional Score: <b>${val[6]}/100</b></span>
+              </div>
+            `;
+          }
+        },
+        grid: {
+          top: 35,
+          left: '5%',
+          right: '5%',
+          bottom: '5%',
+          containLabel: false,
+        },
+        xAxis: { type: 'value', min: 0, max: 100, show: false },
+        yAxis: { type: 'value', min: 0, max: 100, show: false },
+        visualMap: {
+          min: minVal,
+          max: maxVal,
+          splitNumber: 5,
+          color: colors,
+          textStyle: { color: '#6b7280', fontSize: 8 },
+          bottom: '5%',
+          left: '2%',
+          calculable: true,
+          dimension: 2,
+          formatter: labelFormatter,
+        },
+        series: [
+          {
+            name: 'Executive Hotspots',
+            type: 'effectScatter',
+            symbolSize: (val: any) => {
+              const normVal = Math.min(100, ((val[2] - minVal) / (maxVal - minVal || 1)) * 100);
+              return Math.min(45, Math.max(16, 16 + normVal * 0.25));
+            },
+            rippleEffect: { brushType: 'stroke', scale: 3.2, period: 4 },
+            itemStyle: {
+              shadowBlur: 15,
+              opacity: 0.9,
+            },
+            label: {
+              show: true,
+              formatter: '{b}',
+              position: 'top',
+              color: '#ffffff',
+              fontSize: 9,
+              fontWeight: 'bold',
+              fontFamily: 'monospace',
+              backgroundColor: 'rgba(18, 18, 20, 0.7)',
+              padding: [2, 4],
+              borderRadius: 3,
+            },
+            data: regionData,
+          },
+        ],
+      };
     }
 
     // Set Option Configuration
@@ -434,7 +612,7 @@ export default function ScmEChartsPanel({ vehicles }: ScmEChartsPanelProps) {
       window.removeEventListener('resize', resizeHandler);
       chart.dispose();
     };
-  }, [activeMode, history, vehicles]);
+  }, [activeMode, history, vehicles, warehouses, executiveMetric]);
 
   return (
     <div id="scm-echarts-panel" className="p-6 rounded border border-white/10 bg-white/5 flex flex-col h-[400px]">
@@ -477,8 +655,56 @@ export default function ScmEChartsPanel({ vehicles }: ScmEChartsPanelProps) {
             <Map size={10} />
             Hotspot Heatmap
           </button>
+          <button
+            onClick={() => setActiveMode('executive')}
+            className={`px-2.5 py-1 rounded text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 ${
+              activeMode === 'executive' ? 'bg-accent-emerald text-white shadow-md' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <Layers size={10} />
+            Executive Heatmap
+          </button>
         </div>
       </div>
+
+      {/* Interactive Metric Selectors for Executive Heatmap overlay */}
+      {activeMode === 'executive' && (
+        <div className="flex flex-wrap items-center gap-1.5 mb-3 bg-white/[0.02] border border-white/5 p-1.5 rounded text-[9px] font-mono">
+          <span className="text-gray-400 uppercase tracking-wider font-bold mr-1 pl-1">Heat Overlay:</span>
+          <button
+            onClick={() => setExecutiveMetric('combined')}
+            className={`px-2 py-0.5 rounded transition-all cursor-pointer ${
+              executiveMetric === 'combined' ? 'bg-accent-cyan/25 text-accent-cyan font-bold border border-accent-cyan/30' : 'text-gray-400 hover:text-white border border-transparent'
+            }`}
+          >
+            Combined Executive Score
+          </button>
+          <button
+            onClick={() => setExecutiveMetric('efficiency')}
+            className={`px-2 py-0.5 rounded transition-all cursor-pointer ${
+              executiveMetric === 'efficiency' ? 'bg-accent-emerald/25 text-accent-emerald font-bold border border-accent-emerald/30' : 'text-gray-400 hover:text-white border border-transparent'
+            }`}
+          >
+            Warehouse Efficiency
+          </button>
+          <button
+            onClick={() => setExecutiveMetric('carbon')}
+            className={`px-2 py-0.5 rounded transition-all cursor-pointer ${
+              executiveMetric === 'carbon' ? 'bg-accent-rose/25 text-accent-rose font-bold border border-accent-rose/30' : 'text-gray-400 hover:text-white border border-transparent'
+            }`}
+          >
+            Fleet Carbon Impact
+          </button>
+          <button
+            onClick={() => setExecutiveMetric('sales')}
+            className={`px-2 py-0.5 rounded transition-all cursor-pointer ${
+              executiveMetric === 'sales' ? 'bg-accent-amber/25 text-accent-amber font-bold border border-accent-amber/30' : 'text-gray-400 hover:text-white border border-transparent'
+            }`}
+          >
+            Sales Performance
+          </button>
+        </div>
+      )}
 
       {/* Interactive Chart Canvas Stage */}
       <div className="flex-1 w-full min-h-0 relative">
