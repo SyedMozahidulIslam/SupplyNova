@@ -29,7 +29,9 @@ import {
   TrendingUp,
   Sliders,
   Flame,
-  UserCheck
+  UserCheck,
+  Lightbulb,
+  Clock
 } from 'lucide-react';
 import { Vehicle, Warehouse as WarehouseType } from '../types';
 
@@ -38,6 +40,14 @@ interface SustainabilityModuleProps {
   warehouses: WarehouseType[];
   carbonThreshold?: number;
   setCarbonThreshold?: (v: number) => void;
+  onAddAuditLog?: (
+    actionType: 'create' | 'update' | 'delete' | 'approve' | 'configure' | 'override' | 'mitigate',
+    module: 'procurement' | 'warehouse' | 'fleet' | 'coldchain' | 'sales' | 'finance' | 'sustainability' | 'general',
+    description: string,
+    severity?: 'low' | 'medium' | 'high' | 'critical',
+    stateBefore?: string,
+    stateAfter?: string
+  ) => void;
 }
 
 // Sub-tabs within the Sustainability Module
@@ -55,7 +65,8 @@ export default function SustainabilityModule({
   vehicles,
   warehouses,
   carbonThreshold = 18.0,
-  setCarbonThreshold = () => {}
+  setCarbonThreshold = () => {},
+  onAddAuditLog
 }: SustainabilityModuleProps) {
   const [activeSubTab, setActiveSubTab] = useState<SustainabilitySubTab>('executive');
   const [isLiveTelemetry, setIsLiveTelemetry] = useState(true);
@@ -143,6 +154,173 @@ export default function SustainabilityModule({
   const [editingSupplierId, setEditingSupplierId] = useState<string | null>(null);
   const [editEsgVal, setEditEsgVal] = useState<number>(80);
   const [editRecyclableVal, setEditRecyclableVal] = useState<number>(80);
+
+  // --- AI ENERGY AUDITOR STATE ---
+  const [auditIssues, setAuditIssues] = useState([
+    {
+      id: 'aud-1',
+      warehouseId: 'wh-1',
+      warehouseName: 'Dhaka Central mega-Hub',
+      type: 'hvac',
+      title: 'Zone B Dry-Storage Overcooling Anomaly',
+      description: 'Cooling systems are running at 15.5°C during high regional humidity, causing excessive compressor cycling in non-cold-chain zones.',
+      remedy: 'Increase Zone B thermostat target to 21.0°C and synchronize cooling duty-cycle.',
+      powerWasteKw: 18.4,
+      estCostSavingBdt: 45200,
+      isResolved: false,
+    },
+    {
+      id: 'aud-2',
+      warehouseId: 'wh-2',
+      warehouseName: 'Chittagong Port Terminal',
+      type: 'lighting',
+      title: 'High-Bay Lighting daylight Sensor Override',
+      description: 'Daylight level is 850 lux, but indoor high-bay LED grids remain forced to 100% capacity in loading docks.',
+      remedy: 'Activate ambient-adaptive dimming profiles to reduce brightness by 65%.',
+      powerWasteKw: 12.5,
+      estCostSavingBdt: 28000,
+      isResolved: false,
+    },
+    {
+      id: 'aud-3',
+      warehouseId: 'wh-3',
+      warehouseName: 'Gazipur Industrial Transit',
+      type: 'hvac',
+      title: 'Off-Hours HVAC Idle Consumption Leak',
+      description: 'High power draw (32kW) recorded between 10 PM and 4 AM in secondary sorting zones with zero active dispatch activity.',
+      remedy: 'Apply night-setback schedule and automate damper ventilation shutoff.',
+      powerWasteKw: 22.0,
+      estCostSavingBdt: 54000,
+      isResolved: false,
+    },
+    {
+      id: 'aud-4',
+      warehouseId: 'wh-4',
+      warehouseName: 'Sylhet Express Warehouse',
+      type: 'power_factor',
+      title: 'Low Power Factor / Inductive Reactive Loss',
+      description: 'Heavily loaded Sorting Conveyors are pulling reactive power, sagging power factor to 0.79 and triggering utility demand penalties.',
+      remedy: 'Deploy dynamic capacitor banks to correct power factor to 0.96.',
+      powerWasteKw: 8.8,
+      estCostSavingBdt: 19500,
+      isResolved: false,
+    },
+  ]);
+
+  const [auditLogs, setAuditLogs] = useState<string[]>([
+    `[${new Date().toLocaleTimeString()} BDT] AI energy auditor scanned all 5 facilities: found 4 scheduling and calibration anomalies.`,
+    `[${new Date().toLocaleTimeString()} BDT] Telemetry active: sub-meter tracking at Dhaka Central, Chittagong Port, Gazipur, Sylhet, Bogra.`
+  ]);
+
+  // Live power calculations per facility
+  const getWarehouseMeterData = (whId: string) => {
+    // base configurations
+    let baseHvac = 0;
+    let baseLighting = 0;
+    let baseOther = 0;
+    let basePf = 0.95;
+
+    switch (whId) {
+      case 'wh-1':
+        baseHvac = 72.4;
+        baseLighting = 24.8;
+        baseOther = 22.8;
+        basePf = 0.96;
+        break;
+      case 'wh-2':
+        baseHvac = 48.2;
+        baseLighting = 18.5;
+        baseOther = 18.3;
+        basePf = 0.94;
+        break;
+      case 'wh-3':
+        baseHvac = 64.0;
+        baseLighting = 20.2;
+        baseOther = 25.8;
+        basePf = 0.93;
+        break;
+      case 'wh-4':
+        baseHvac = 32.5;
+        baseLighting = 12.4;
+        baseOther = 10.1;
+        basePf = 0.79; // Starts low
+        break;
+      case 'wh-5':
+        baseHvac = 25.0;
+        baseLighting = 10.2;
+        baseOther = 9.8;
+        basePf = 0.97;
+        break;
+      default:
+        baseHvac = 30.0;
+        baseLighting = 15.0;
+        baseOther = 10.0;
+        basePf = 0.95;
+    }
+
+    // Apply reductions if resolved
+    const relevantIssues = auditIssues.filter(issue => issue.warehouseId === whId);
+    relevantIssues.forEach(issue => {
+      if (issue.isResolved) {
+        if (issue.type === 'hvac') {
+          baseHvac = Math.max(5.0, baseHvac - issue.powerWasteKw);
+        } else if (issue.type === 'lighting') {
+          baseLighting = Math.max(2.0, baseLighting - issue.powerWasteKw);
+        } else if (issue.type === 'power_factor') {
+          basePf = 0.96; // Corrected PF
+        }
+      }
+    });
+
+    // Add tiny fluctuation using tickerOffset
+    const seed = whId === 'wh-1' ? 1.2 : whId === 'wh-2' ? 0.8 : whId === 'wh-3' ? 1.0 : whId === 'wh-4' ? 0.5 : 0.4;
+    const fluctuation = tickerOffset * seed;
+
+    const finalHvac = Math.max(0, parseFloat((baseHvac + fluctuation * 0.4).toFixed(1)));
+    const finalLighting = Math.max(0, parseFloat((baseLighting + fluctuation * 0.2).toFixed(1)));
+    const finalOther = Math.max(0, parseFloat((baseOther + fluctuation * 0.1).toFixed(1)));
+    const finalPf = Math.min(1.0, parseFloat((basePf + (whId === 'wh-4' && !relevantIssues[0]?.isResolved ? tickerOffset * 0.005 : 0)).toFixed(2)));
+
+    const totalKw = parseFloat((finalHvac + finalLighting + finalOther).toFixed(1));
+
+    return {
+      hvac: finalHvac,
+      lighting: finalLighting,
+      other: finalOther,
+      pf: finalPf,
+      total: totalKw,
+    };
+  };
+
+  const handleTriggerOptimization = (issueId: string) => {
+    setAuditIssues(prev =>
+      prev.map(issue => {
+        if (issue.id === issueId) {
+          const updated = { ...issue, isResolved: true };
+          // Push a log line to the local auditing logs
+          setAuditLogs(logs => [
+            `[${new Date().toLocaleTimeString()} BDT] AI AUTO-REMEDIAL EXECUTION: Applied "${updated.remedy}" at ${updated.warehouseName}. Reclaimed ${updated.powerWasteKw} kW. Saved ৳${updated.estCostSavingBdt.toLocaleString()}/mo.`,
+            ...logs
+          ]);
+
+          // Push to the searchable corporate compliance audit trail
+          if (onAddAuditLog) {
+            onAddAuditLog(
+              'override',
+              'sustainability',
+              `Triggered AI Energy Optimization at ${updated.warehouseName}: "${updated.title}". Remediation: "${updated.remedy}". Reclaimed ${updated.powerWasteKw} kW of power.`,
+              'medium',
+              `power_waste: ${updated.powerWasteKw}kW, status: unoptimized`,
+              `power_waste: 0.0kW, status: optimized_by_ai, monthly_savings_bdt: ৳${updated.estCostSavingBdt.toLocaleString()}`
+            );
+          }
+
+          return updated;
+        }
+        return issue;
+      })
+    );
+  };
 
   // ECharts References
   const forecastChartRef = useRef<HTMLDivElement>(null);
@@ -1139,6 +1317,261 @@ export default function SustainabilityModule({
             </div>
 
           </div>
+
+          {/* AI Energy Auditor Section */}
+          <div className="p-5 rounded-xl border border-white/10 bg-white/5 space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-white/5 pb-4 gap-4">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-accent-emerald/15 border border-accent-emerald/30 rounded-lg text-accent-emerald animate-pulse">
+                  <Sparkles size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    AI Energy Auditor &amp; Smart Utility Ledger
+                    <span className="text-[8px] font-mono font-black bg-accent-emerald/15 text-accent-emerald px-1.5 py-0.5 rounded border border-accent-emerald/20 animate-pulse">
+                      LIVE FEED
+                    </span>
+                  </h3>
+                  <p className="text-[10px] text-gray-400 mt-0.5">
+                    Continuous frequency monitoring across warehouse sub-meters to flag active HVAC/lighting scheduling leaks and reactive power factor sags.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 self-start md:self-auto">
+                <div className="w-2 h-2 rounded-full bg-accent-emerald animate-ping" />
+                <span className="text-[9px] font-mono text-accent-emerald font-black uppercase tracking-wider">
+                  Meters Synced BDT
+                </span>
+              </div>
+            </div>
+
+            {/* Auditor KPI Panel */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="p-3 bg-white/[0.01] border border-white/5 rounded-lg">
+                <span className="text-[8px] font-mono text-gray-500 block uppercase">Aggregate Power Draw</span>
+                <span className="text-lg font-mono font-black text-white">
+                  {warehouses.reduce((acc, wh) => acc + getWarehouseMeterData(wh.id).total, 0).toFixed(1)} <span className="text-xs text-gray-400 font-normal">kW</span>
+                </span>
+                <span className="text-[8px] font-mono text-accent-emerald block mt-1">▲ Real-time active telemetry</span>
+              </div>
+              
+              <div className="p-3 bg-white/[0.01] border border-white/5 rounded-lg">
+                <span className="text-[8px] font-mono text-gray-500 block uppercase">Intercepted Idle Waste</span>
+                <span className={`text-lg font-mono font-black ${auditIssues.some(i => !i.isResolved) ? 'text-accent-amber' : 'text-accent-emerald'}`}>
+                  {auditIssues.reduce((acc, issue) => acc + (!issue.isResolved ? issue.powerWasteKw : 0), 0).toFixed(1)} <span className="text-xs text-gray-400 font-normal">kW</span>
+                </span>
+                <span className="text-[8px] font-mono text-gray-400 block mt-1">
+                  {auditIssues.filter(i => !i.isResolved).length} active scheduling leaks
+                </span>
+              </div>
+
+              <div className="p-3 bg-white/[0.01] border border-white/5 rounded-lg">
+                <span className="text-[8px] font-mono text-gray-500 block uppercase">Avg Utility Power Factor</span>
+                <span className="text-lg font-mono font-black text-accent-cyan">
+                  {(warehouses.reduce((acc, wh) => acc + getWarehouseMeterData(wh.id).pf, 0) / warehouses.length).toFixed(2)}
+                </span>
+                <span className="text-[8px] font-mono text-accent-emerald block mt-1">✓ Target standard 0.95+</span>
+              </div>
+
+              <div className="p-3 bg-white/[0.01] border border-white/5 rounded-lg">
+                <span className="text-[8px] font-mono text-gray-500 block uppercase">Monthly Capital Drain</span>
+                <span className={`text-lg font-mono font-black ${auditIssues.some(i => !i.isResolved) ? 'text-accent-rose' : 'text-accent-emerald'}`}>
+                  ৳{auditIssues.reduce((acc, issue) => acc + (!issue.isResolved ? issue.estCostSavingBdt : 0), 0).toLocaleString()}
+                </span>
+                <span className="text-[8px] font-mono text-gray-400 block mt-1">
+                  {auditIssues.some(i => !i.isResolved) ? 'Potential SLA waste' : 'Maximum efficiency reached!'}
+                </span>
+              </div>
+            </div>
+
+            {/* Interactive Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              
+              {/* Left Column: Live sub-meters (col-span-5) */}
+              <div className="lg:col-span-5 space-y-4">
+                <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                  <h4 className="text-[10px] font-mono font-black uppercase text-accent-emerald tracking-wider flex items-center gap-1">
+                    <Activity size={10} /> Active Facility Sub-meters
+                  </h4>
+                  <span className="text-[8px] font-mono text-gray-500 uppercase">Fluctuating live</span>
+                </div>
+
+                <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
+                  {warehouses.map(wh => {
+                    const meter = getWarehouseMeterData(wh.id);
+                    const anomalies = auditIssues.filter(issue => issue.warehouseId === wh.id && !issue.isResolved);
+                    
+                    return (
+                      <div key={wh.id} className="p-3 bg-brand-black/30 border border-white/5 rounded-lg space-y-2.5 hover:border-white/10 transition-all">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-white uppercase truncate max-w-[160px]">
+                            {wh.name.replace('Distribution', 'Dist.')}
+                          </span>
+                          {anomalies.length > 0 ? (
+                            <span className="text-[8px] font-mono font-bold bg-accent-rose/15 text-accent-rose border border-accent-rose/20 px-1.5 py-0.2 rounded shrink-0 animate-pulse">
+                              ⚠️ {anomalies.length} LEAK
+                            </span>
+                          ) : (
+                            <span className="text-[8px] font-mono font-bold bg-accent-emerald/15 text-accent-emerald border border-accent-emerald/20 px-1.5 py-0.2 rounded shrink-0">
+                              ✓ OPTIMAL
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-mono">
+                          <div className="bg-white/[0.02] p-1.5 rounded border border-white/5">
+                            <span className="text-[8px] text-gray-500 block">TOTAL</span>
+                            <span className="text-white font-bold">{meter.total} <span className="text-[8px] text-gray-500 font-normal">kW</span></span>
+                          </div>
+                          <div className="bg-white/[0.02] p-1.5 rounded border border-white/5">
+                            <span className="text-[8px] text-gray-500 block">HVAC</span>
+                            <span className="text-accent-cyan font-bold">{meter.hvac} <span className="text-[8px] text-gray-500 font-normal">kW</span></span>
+                          </div>
+                          <div className="bg-white/[0.02] p-1.5 rounded border border-white/5">
+                            <span className="text-[8px] text-gray-500 block">LIGHTS</span>
+                            <span className="text-accent-amber font-bold">{meter.lighting} <span className="text-[8px] text-gray-500 font-normal">kW</span></span>
+                          </div>
+                        </div>
+
+                        {/* Power Factor bar */}
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[8px] font-mono">
+                            <span className="text-gray-500">POWER FACTOR (cos φ)</span>
+                            <span className={meter.pf < 0.85 ? 'text-accent-rose font-bold' : 'text-accent-emerald font-bold'}>
+                              {meter.pf} {meter.pf < 0.85 && '(Incurring Penalties)'}
+                            </span>
+                          </div>
+                          <div className="w-full bg-white/5 h-1.5 rounded overflow-hidden">
+                            <div 
+                              className={`h-full transition-all duration-500 ${meter.pf < 0.85 ? 'bg-accent-rose' : 'bg-accent-emerald'}`} 
+                              style={{ width: `${meter.pf * 100}%` }} 
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Right Column: Inefficiencies & AI Corrective Actions (col-span-7) */}
+              <div className="lg:col-span-7 space-y-4">
+                <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                  <h4 className="text-[10px] font-mono font-black uppercase text-accent-amber tracking-wider flex items-center gap-1">
+                    <Sliders size={10} /> Active Audit Flag Exceptions
+                  </h4>
+                  <span className="text-[8px] font-mono text-gray-500 uppercase">One-click auto remediations</span>
+                </div>
+
+                <div className="space-y-3.5 max-h-[360px] overflow-y-auto pr-1">
+                  {auditIssues.map(issue => {
+                    const isHvac = issue.type === 'hvac';
+                    const isPf = issue.type === 'power_factor';
+                    
+                    return (
+                      <div 
+                        key={issue.id} 
+                        className={`p-3.5 rounded-lg border transition-all space-y-3 ${
+                          issue.isResolved 
+                            ? 'bg-accent-emerald/[0.01] border-accent-emerald/20 opacity-75' 
+                            : 'bg-white/[0.01] border-white/10 hover:border-white/20'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1 flex-1">
+                            <div className="flex items-center flex-wrap gap-1.5">
+                              <span className={`text-[8px] font-mono font-black px-1.5 py-0.2 rounded uppercase ${
+                                isPf 
+                                  ? 'bg-accent-rose/10 text-accent-rose border border-accent-rose/20' 
+                                  : isHvac 
+                                  ? 'bg-accent-cyan/10 text-accent-cyan border border-accent-cyan/20' 
+                                  : 'bg-accent-amber/10 text-accent-amber border border-accent-amber/20'
+                              }`}>
+                                {issue.type.replace('_', ' ')}
+                              </span>
+                              <span className="text-[9px] font-mono text-gray-400">
+                                {issue.warehouseName}
+                              </span>
+                            </div>
+                            <h4 className={`text-xs font-bold leading-snug ${issue.isResolved ? 'text-gray-400 line-through' : 'text-white'}`}>
+                              {issue.title}
+                            </h4>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <span className="text-[9px] font-mono text-gray-500 block uppercase">Est. Saving</span>
+                            <span className={`text-xs font-mono font-black block ${issue.isResolved ? 'text-accent-emerald' : 'text-accent-rose'}`}>
+                              ৳{issue.estCostSavingBdt.toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+
+                        {!issue.isResolved && (
+                          <p className="text-[10px] text-gray-400 leading-relaxed font-sans">
+                            {issue.description}
+                          </p>
+                        )}
+
+                        {/* Remediating logic */}
+                        <div className={`p-2.5 rounded border flex flex-col md:flex-row md:items-center justify-between gap-3 text-left ${
+                          issue.isResolved 
+                            ? 'bg-accent-emerald/5 border-accent-emerald/10' 
+                            : 'bg-brand-black/40 border-white/5'
+                        }`}>
+                          <div className="flex items-start gap-2 flex-1">
+                            <div className={`p-1.5 rounded mt-0.5 ${issue.isResolved ? 'bg-accent-emerald/15 text-accent-emerald' : 'bg-white/5 text-accent-amber'}`}>
+                              {issue.isResolved ? <CheckCircle2 size={12} /> : <Zap size={12} className="animate-pulse" />}
+                            </div>
+                            <div className="space-y-0.5">
+                              <span className="text-[8px] font-mono font-black block text-gray-500 uppercase">
+                                {issue.isResolved ? 'CORRECTIVE ACTION COMPLETED' : 'AI SUGGESTED RESOLUTION'}
+                              </span>
+                              <p className={`text-[10px] leading-relaxed font-sans ${issue.isResolved ? 'text-accent-emerald/80' : 'text-gray-300'}`}>
+                                {issue.remedy}
+                              </p>
+                            </div>
+                          </div>
+
+                          {!issue.isResolved ? (
+                            <button
+                              onClick={() => handleTriggerOptimization(issue.id)}
+                              className="px-3 py-1.5 bg-accent-emerald hover:bg-accent-emerald/85 text-brand-black text-[9px] font-black uppercase tracking-widest rounded cursor-pointer transition-all shrink-0 hover:scale-[1.02] flex items-center gap-1"
+                            >
+                              <Sparkles size={10} /> Optimize Now
+                            </button>
+                          ) : (
+                            <span className="text-[8px] font-mono font-black text-accent-emerald bg-accent-emerald/15 px-2 py-1 rounded border border-accent-emerald/25 uppercase shrink-0">
+                              SAVING ACTIVE (-{issue.powerWasteKw} kW)
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+            </div>
+
+            {/* Audit Logs Console */}
+            <div className="bg-brand-black/65 border border-white/5 rounded-lg p-3 space-y-2">
+              <div className="flex items-center justify-between border-b border-white/5 pb-1.5">
+                <span className="text-[8px] font-mono text-gray-500 font-bold uppercase tracking-widest flex items-center gap-1">
+                  <Clock size={10} /> AUDITING PROTOCOLS &amp; CONSOLE OUTPUT
+                </span>
+                <span className="text-[8px] font-mono text-accent-emerald animate-pulse">● SECURE SSL SYNCED</span>
+              </div>
+              <div className="space-y-1.5 max-h-[85px] overflow-y-auto pr-1 font-mono text-[9px] text-gray-400">
+                {auditLogs.map((log, i) => (
+                  <div key={i} className="flex items-start gap-1 leading-normal">
+                    <span className="text-accent-emerald shrink-0">&gt;&gt;</span>
+                    <span className={log.includes('AUTO-REMEDIAL') ? 'text-accent-emerald' : ''}>{log}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
         </div>
       )}
 

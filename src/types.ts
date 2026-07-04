@@ -222,3 +222,20 @@ export interface AiStrategySuggestion {
   confidenceScore: number;
   timestamp: string;
 }
+
+export interface ComplianceAuditLogEntry {
+  id: string;
+  timestamp: string;
+  userId: string;
+  userName: string;
+  userRole: string;
+  department: string;
+  actionType: 'create' | 'update' | 'delete' | 'mitigate' | 'approve' | 'configure' | 'override';
+  module: 'procurement' | 'warehouse' | 'fleet' | 'coldchain' | 'sales' | 'general' | 'sustainability' | 'compliance' | 'finance';
+  description: string;
+  ipAddress: string;
+  hashSignature: string; // AES/SHA-256 integrity emulator
+  stateBefore?: string;
+  stateAfter?: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+}

@@ -52,6 +52,7 @@ export default function Sidebar({
     { id: 'finance', name: 'Finance Ledger BDT', icon: DollarSign, roles: ['Super Admin', 'COO', 'Managing Director', 'Finance Manager'] },
     { id: 'sustainability', name: 'ESG & Carbon Intel', icon: Leaf, roles: ['Super Admin', 'COO', 'Supply Chain Director', 'Managing Director', 'Procurement Director', 'Warehouse Director', 'Logistics Director', 'Finance Manager'] },
     { id: 'ai-center', name: 'AI SCM Optimizer', icon: Brain, roles: ['Super Admin', 'COO', 'Supply Chain Director', 'Managing Director', 'Procurement Director', 'Warehouse Director', 'Logistics Director', 'Finance Manager'] },
+    { id: 'audit-log', name: 'Compliance Audit Log', icon: Shield, roles: ['Super Admin', 'COO', 'Supply Chain Director', 'Managing Director', 'Procurement Director', 'Warehouse Director', 'Logistics Director', 'National Sales Manager', 'Finance Manager'] },
   ];
 
   const allowedNavs = navigationItems.filter(item => 
