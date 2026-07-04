@@ -12,6 +12,7 @@ import ColdChainModule from './components/ColdChainModule';
 import SalesForceModule from './components/SalesForceModule';
 import FinanceModule from './components/FinanceModule';
 import AiAdvisor from './components/AiAdvisor';
+import SustainabilityModule from './components/SustainabilityModule';
 
 import {
   EMPLOYEES,
@@ -319,6 +320,13 @@ export default function App() {
 
           {activeTab === 'finance' && (
             <FinanceModule financials={financials} />
+          )}
+
+          {activeTab === 'sustainability' && (
+            <SustainabilityModule
+              vehicles={vehicles}
+              warehouses={warehouses}
+            />
           )}
 
           {activeTab === 'ai-center' && (

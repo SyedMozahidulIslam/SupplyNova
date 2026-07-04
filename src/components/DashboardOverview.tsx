@@ -28,6 +28,7 @@ import {
 } from 'recharts';
 import { Employee, Alert, Warehouse, Vehicle, FinancialRecord } from '../types';
 import { PRODUCTS } from '../data/mockData';
+import ScmEChartsPanel from './ScmEChartsPanel';
 
 interface DashboardOverviewProps {
   currentEmployee: Employee;
@@ -134,8 +135,8 @@ export default function DashboardOverview({
           <div className="absolute top-0 right-0 w-32 h-32 bg-accent-blue/[0.01] rounded-full filter blur-2xl group-hover:bg-accent-blue/[0.03] transition-all"></div>
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Total Sales Revenue</p>
-              <h4 className="text-3xl font-display font-black italic tracking-tighter text-white mt-1.5">
+              <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest font-kpi">Total Sales Revenue</p>
+              <h4 className="text-xl sm:text-2xl font-kpi font-extrabold tracking-wider text-white mt-2 leading-none uppercase">
                 ৳{(totalIncome / 100000).toFixed(1)} Lakh
               </h4>
             </div>
@@ -157,8 +158,8 @@ export default function DashboardOverview({
           <div className="absolute top-0 right-0 w-32 h-32 bg-accent-cyan/[0.01] rounded-full filter blur-2xl group-hover:bg-accent-cyan/[0.03] transition-all"></div>
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Fleet Transit Ratio</p>
-              <h4 className="text-3xl font-display font-black italic tracking-tighter text-white mt-1.5">
+              <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest font-kpi">Fleet Transit Ratio</p>
+              <h4 className="text-xl sm:text-2xl font-kpi font-extrabold tracking-wider text-white mt-2 leading-none uppercase">
                 {totalFleetInTransit} / {vehicles.length} Active
               </h4>
             </div>
@@ -179,8 +180,8 @@ export default function DashboardOverview({
           <div className="absolute top-0 right-0 w-32 h-32 bg-accent-amber/[0.01] rounded-full filter blur-2xl group-hover:bg-accent-amber/[0.03] transition-all"></div>
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Inventory Levels</p>
-              <h4 className="text-3xl font-display font-black italic tracking-tighter text-white mt-1.5">
+              <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest font-kpi">Inventory Levels</p>
+              <h4 className="text-xl sm:text-2xl font-kpi font-extrabold tracking-wider text-white mt-2 leading-none uppercase">
                 {totalStockCount.toLocaleString()} Units
               </h4>
             </div>
@@ -201,8 +202,8 @@ export default function DashboardOverview({
           <div className="absolute top-0 right-0 w-32 h-32 bg-accent-emerald/[0.01] rounded-full filter blur-2xl group-hover:bg-accent-emerald/[0.03] transition-all"></div>
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Cold Chain Integrity</p>
-              <h4 className="text-3xl font-display font-black italic tracking-tighter text-white mt-1.5">
+              <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest font-kpi">Cold Chain Integrity</p>
+              <h4 className="text-xl sm:text-2xl font-kpi font-extrabold tracking-wider text-white mt-2 leading-none uppercase">
                 99.8% Perfect
               </h4>
             </div>
@@ -216,54 +217,15 @@ export default function DashboardOverview({
         </button>
       </div>
 
-      {/* Main Charts area */}
+      {/* Main Charts & Real-time ECharts Analytics Engine */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Weekly Revenue & Profit Breakdown */}
-        <div className="lg:col-span-2 p-6 rounded bg-white/5 border border-white/10 flex flex-col justify-between h-[360px]">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-xs font-black uppercase tracking-widest text-gray-500">Revenue Profit Trend</h3>
-              <p className="text-[10px] font-mono text-gray-400 mt-0.5 uppercase tracking-wider">Weekly transaction overview</p>
-            </div>
-            <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-wider">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded bg-accent-blue inline-block"></span>
-                <span className="text-gray-400">Revenue (৳)</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded bg-accent-emerald inline-block"></span>
-                <span className="text-gray-400">Profit (৳)</span>
-              </div>
-            </div>
-          </div>
-          <div className="flex-1 w-full min-h-0 text-[10px] font-mono text-white/40">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={financialTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2a2a35" />
-                <XAxis dataKey="name" stroke="#6b7280" />
-                <YAxis stroke="#6b7280" />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#121214', borderColor: 'rgba(255,255,255,0.1)', color: '#fff' }}
-                />
-                <Area type="monotone" dataKey="revenue" stroke="#3b82f6" fillOpacity={1} fill="url(#colorRevenue)" strokeWidth={2} />
-                <Area type="monotone" dataKey="profit" stroke="#10b981" fillOpacity={1} fill="url(#colorProfit)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+        {/* Real-time Telemetry & Map Heatmap Control Center */}
+        <div className="lg:col-span-2">
+          <ScmEChartsPanel vehicles={vehicles} />
         </div>
 
         {/* Warehouse Stock distribution */}
-        <div className="p-6 rounded bg-white/5 border border-white/10 flex flex-col justify-between h-[360px]">
+        <div className="p-6 rounded bg-white/5 border border-white/10 flex flex-col justify-between h-[400px]">
           <div>
             <h3 className="text-xs font-black uppercase tracking-widest text-gray-500">Stock Distribution</h3>
             <p className="text-[10px] font-mono text-gray-400 mt-0.5 uppercase tracking-wider">Active stock counts by category</p>

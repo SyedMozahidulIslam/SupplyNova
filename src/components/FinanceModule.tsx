@@ -57,8 +57,8 @@ export default function FinanceModule({ financials }: FinanceModuleProps) {
         {/* Total Receivables */}
         <div className="p-5 rounded-xl bg-white/[0.02] border border-white/5 flex flex-col justify-between">
           <div>
-            <span className="text-white/40 font-mono text-[9px] uppercase tracking-wider">SCM Receivables / Income</span>
-            <h4 className="text-xl font-display font-extrabold text-accent-emerald mt-1.5">
+            <span className="text-white/40 font-kpi text-[8px] uppercase tracking-widest font-bold">SCM Receivables / Income</span>
+            <h4 className="text-base sm:text-lg font-kpi font-extrabold text-accent-emerald mt-2 leading-none uppercase tracking-wider">
               ৳{totalIncome.toLocaleString()} BDT
             </h4>
           </div>
@@ -68,8 +68,8 @@ export default function FinanceModule({ financials }: FinanceModuleProps) {
         {/* Total Payables */}
         <div className="p-5 rounded-xl bg-white/[0.02] border border-white/5 flex flex-col justify-between">
           <div>
-            <span className="text-white/40 font-mono text-[9px] uppercase tracking-wider">SCM Payables / Expenses</span>
-            <h4 className="text-xl font-display font-extrabold text-accent-rose mt-1.5">
+            <span className="text-white/40 font-kpi text-[8px] uppercase tracking-widest font-bold">SCM Payables / Expenses</span>
+            <h4 className="text-base sm:text-lg font-kpi font-extrabold text-accent-rose mt-2 leading-none uppercase tracking-wider">
               ৳{totalExpense.toLocaleString()} BDT
             </h4>
           </div>
@@ -79,8 +79,8 @@ export default function FinanceModule({ financials }: FinanceModuleProps) {
         {/* Net Profit Surplus */}
         <div className="p-5 rounded-xl bg-gradient-to-tr from-accent-blue/10 to-accent-cyan/10 border border-accent-blue/20 flex flex-col justify-between shadow-lg shadow-accent-blue/5">
           <div>
-            <span className="text-white/40 font-mono text-[9px] uppercase tracking-wider">Net SCM Profit Surplus</span>
-            <h4 className="text-xl font-display font-extrabold text-white mt-1.5">
+            <span className="text-white/40 font-kpi text-[8px] uppercase tracking-widest font-bold">Net SCM Profit Surplus</span>
+            <h4 className="text-base sm:text-lg font-kpi font-extrabold text-white mt-2 leading-none uppercase tracking-wider">
               ৳{netCapital.toLocaleString()} BDT
             </h4>
           </div>

@@ -15,6 +15,7 @@ import {
   CheckCircle,
   X,
   ChevronDown,
+  Leaf,
 } from 'lucide-react';
 import { Employee, Role } from '../types';
 import { EMPLOYEES } from '../data/mockData';
@@ -49,6 +50,7 @@ export default function Sidebar({
     { id: 'coldchain', name: 'Cold Chain Telemetry', icon: Thermometer, roles: ['Super Admin', 'COO', 'Supply Chain Director', 'Logistics Director', 'Warehouse Director', 'Fleet Manager', 'Warehouse Manager'] },
     { id: 'sales', name: 'Sales Beat Automation', icon: Compass, roles: ['Super Admin', 'COO', 'National Sales Manager', 'Regional Sales Manager', 'Area Sales Manager', 'Territory Officer', 'Sales Representative'] },
     { id: 'finance', name: 'Finance Ledger BDT', icon: DollarSign, roles: ['Super Admin', 'COO', 'Managing Director', 'Finance Manager'] },
+    { id: 'sustainability', name: 'ESG & Carbon Intel', icon: Leaf, roles: ['Super Admin', 'COO', 'Supply Chain Director', 'Managing Director', 'Procurement Director', 'Warehouse Director', 'Logistics Director', 'Finance Manager'] },
     { id: 'ai-center', name: 'AI SCM Optimizer', icon: Brain, roles: ['Super Admin', 'COO', 'Supply Chain Director', 'Managing Director', 'Procurement Director', 'Warehouse Director', 'Logistics Director', 'Finance Manager'] },
   ];
 
@@ -61,15 +63,86 @@ export default function Sidebar({
       {/* Brand Header */}
       <div className="p-6 border-b border-white/10 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="relative w-9 h-9 flex items-center justify-center shrink-0">
+          <div className="relative w-11 h-11 flex items-center justify-center shrink-0">
             {/* Pulsing glow background */}
-            <div className="absolute inset-0 bg-accent-blue/20 rounded-lg blur-sm animate-pulse" />
-            {/* Elegant stylized layered SCM logo */}
-            <div className="relative w-8 h-8 bg-gradient-to-br from-accent-blue via-blue-600 to-blue-900 rounded border border-white/20 flex items-center justify-center shadow-lg transform rotate-3 hover:rotate-12 hover:scale-105 transition-all duration-300">
-              <svg className="w-4.5 h-4.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                <path d="M2 17l10 5 10-5" />
-                <path d="M2 12l10 5 10-5" />
+            <div className="absolute inset-0 bg-accent-blue/15 rounded-lg blur-md animate-pulse" />
+            
+            {/* High-Fidelity Custom SupplyNova Icon */}
+            <div className="relative w-10 h-10 bg-brand-dark-grey rounded-lg border border-white/15 flex items-center justify-center shadow-2xl overflow-hidden hover:scale-105 transition-all duration-300 group">
+              {/* Subtle background circuit pattern */}
+              <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:8px_8px] opacity-20 group-hover:opacity-40 transition-opacity" />
+              
+              <svg className="w-9 h-9 relative z-10" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  {/* High-impact organic gradient from Concept 3 (Cyan-Blue to Emerald) */}
+                  <linearGradient id="supplynova-ribbon-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#06b6d4" />  {/* Cyan */}
+                    <stop offset="50%" stopColor="#3b82f6" /> {/* Electric Blue */}
+                    <stop offset="100%" stopColor="#10b981" /> {/* Bio Emerald */}
+                  </linearGradient>
+                  
+                  {/* Subtle bright overlay for ribbon shine */}
+                  <linearGradient id="shine-grad" x1="100%" y1="100%" x2="0%" y2="0%">
+                    <stop offset="0%" stopColor="rgba(255,255,255,0.8)" />
+                    <stop offset="50%" stopColor="rgba(255,255,255,0.1)" />
+                    <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+                  </linearGradient>
+
+                  {/* Dynamic glow filter */}
+                  <filter id="vector-glow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="2.5" result="blur" />
+                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                  </filter>
+                </defs>
+                
+                {/* Background Nano-scale circular waves/fibrils */}
+                <circle cx="50" cy="50" r="42" stroke="rgba(6, 182, 212, 0.15)" strokeWidth="0.75" strokeDasharray="3 3" />
+                <circle cx="50" cy="50" r="35" stroke="rgba(16, 185, 129, 0.1)" strokeWidth="0.5" />
+                <circle cx="35" cy="50" r="16" stroke="rgba(6, 182, 212, 0.12)" strokeWidth="0.5" />
+
+                {/* The main SupplyNova Infinity Ribbon Loop structure */}
+                <path 
+                  d="M 34 35 
+                     C 15 35, 10 52, 28 65 
+                     C 42 75, 58 75, 72 65 
+                     C 90 52, 85 35, 66 35 
+                     C 50 35, 45 46, 35 58 
+                     C 25 70, 15 70, 28 52 
+                     C 35 44, 42 35, 66 35 
+                     Z" 
+                  fill="none" 
+                  stroke="url(#supplynova-ribbon-grad)" 
+                  strokeWidth="8.5" 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round"
+                />
+
+                {/* Luminous Core shine line inside the loop to replicate composite gleam */}
+                <path 
+                  d="M 33 37 
+                     C 18 37, 14 52, 28 62 
+                     C 40 71, 60 71, 72 62 
+                     C 84 52, 80 37, 67 37" 
+                  fill="none" 
+                  stroke="url(#shine-grad)" 
+                  strokeWidth="2" 
+                  strokeLinecap="round"
+                />
+
+                {/* Left side circular target matrix structure (from the design prototype) */}
+                <circle cx="30" cy="50" r="8" stroke="url(#supplynova-ribbon-grad)" strokeWidth="1.2" strokeDasharray="1.5 2" />
+                <line x1="26" y1="46" x2="34" y2="54" stroke="#06b6d4" strokeWidth="1" strokeOpacity="0.8" />
+                <line x1="26" y1="54" x2="34" y2="46" stroke="#06b6d4" strokeWidth="1" strokeOpacity="0.8" />
+
+                {/* High-impact forward/upward Arrow representing global logistics */}
+                <path 
+                  d="M 45 62 L 57 45 L 51 43 L 64 33 L 66 46 L 60 44 L 48 62 Z" 
+                  fill="#ffffff" 
+                  filter="url(#vector-glow)"
+                />
+                
+                {/* Secondary energy stream tracing the arrow line */}
+                <line x1="43" y1="65" x2="52" y2="52" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" />
               </svg>
             </div>
           </div>

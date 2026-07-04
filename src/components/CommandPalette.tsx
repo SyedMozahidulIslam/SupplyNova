@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, X, Package, Truck, Compass, ShoppingCart, UserCheck, Play } from 'lucide-react';
+import { Search, X, Package, Truck, Compass, ShoppingCart, UserCheck, Play, Leaf } from 'lucide-react';
 import { PRODUCTS, EMPLOYEES, WAREHOUSES, VEHICLES } from '../data/mockData';
 
 interface CommandPaletteProps {
@@ -44,6 +44,7 @@ export default function CommandPalette({ isOpen, onClose, onNavigateTab }: Comma
     { id: 'procurement', name: 'Procurement RFQ Portal', icon: ShoppingCart },
     { id: 'warehouse', name: 'Digital Twin / Warehouse Layout', icon: Package },
     { id: 'fleet', name: 'GPS Fleet Live Tracking Map', icon: Truck },
+    { id: 'sustainability', name: 'Sustainability & ESG Command Center', icon: Leaf },
   ].filter(m => m.name.toLowerCase().includes(query.toLowerCase()));
 
   return (
