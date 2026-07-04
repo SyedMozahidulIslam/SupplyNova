@@ -41,6 +41,7 @@ export default function App() {
   const [alerts, setAlerts] = useState<Alert[]>(ALERTS);
   const [financials, setFinancials] = useState<FinancialRecord[]>(FINANCIAL_RECORDS);
   const [beatPlans, setBeatPlans] = useState<BeatPlan[]>(BEAT_PLANS);
+  const [carbonThreshold, setCarbonThreshold] = useState<number>(18.0);
 
   // Real-time telemetry simulation interval (updates vehicle telemetry every 4 seconds)
   const [telemetryTick, setTelemetryTick] = useState(0);
@@ -57,6 +58,62 @@ export default function App() {
       setVehicles((prevVehicles) => getUpdatedTelemetry(prevVehicles, telemetryTick));
     }
   }, [telemetryTick]);
+
+  // Sustainability Critical alerts checker based on facility carbon emission intensity crossing threshold
+  useEffect(() => {
+    const criticalFacilities = warehouses.filter(wh => {
+      const carbonEquivalent = 12.4 + (wh.filledPercent / 10) - (wh.isOptimized ? 2.5 : 0);
+      return carbonEquivalent > carbonThreshold;
+    });
+
+    if (criticalFacilities.length > 0) {
+      setAlerts(prev => {
+        let updated = false;
+        const newAlerts = [...prev];
+
+        criticalFacilities.forEach(wh => {
+          const carbonEquivalent = 12.4 + (wh.filledPercent / 10) - (wh.isOptimized ? 2.5 : 0);
+          const alertId = `sus-crit-${wh.id}`;
+          const alreadyExists = prev.some(alt => alt.id === alertId && !alt.actionTaken);
+
+          if (!alreadyExists) {
+            // Get AI-suggested corrective action based on warehouse ID
+            let correctiveAction = "Optimize facility lighting runtimes and recalibrate climate controls to eco-mode (Target 21°C instead of 18°C) for general storage zones.";
+            if (wh.id === 'wh-1') {
+              correctiveAction = "Reroute 25% of low-priority retail stock to Gazipur Industrial Transit to balance storage load and reduce cooling-driven Scope 2 power demand, saving estimated 2.8 Tons of daily CO₂e.";
+            } else if (wh.id === 'wh-2') {
+              correctiveAction = "Curtail non-essential high-power logistics conveyor operation during peak grid load hours. Dispatch 15 Tons of cold storage shipments earlier to maximize off-peak solar-battery discharge.";
+            } else if (wh.id === 'wh-3') {
+              correctiveAction = "Initiate power load-shedding to active auxiliary HVAC units. Transition backup diesel generator dispatch to verified bio-diesel blends to lower Scope 1 intensity.";
+            } else if (wh.id === 'wh-4') {
+              correctiveAction = "Calibrate climate controls to eco-mode (Target 21°C) and restrict non-essential auxiliary systems during high temperature hours.";
+            } else if (wh.id === 'wh-5') {
+              correctiveAction = "Schedule preventive maintenance for the industrial refrigeration compressors to restore peak heat pump efficiency, avoiding 1.5 Tons of excess electrical emissions.";
+            }
+
+            // Also check if there's an already action-taken one. We don't want to re-trigger if they already resolved it.
+            const resolvedExists = prev.some(alt => alt.id === alertId && alt.actionTaken);
+            if (!resolvedExists) {
+              const newAlert: Alert = {
+                id: alertId,
+                title: 'Sustainability Critical: Carbon Limit Cross',
+                description: `${wh.name} emissions intensity is at ${carbonEquivalent.toFixed(1)} Tons, crossing the corporate threshold of ${carbonThreshold.toFixed(1)} Tons. Immediate remediation required.`,
+                severity: 'critical',
+                timestamp: new Date().toISOString(),
+                module: 'sustainability',
+                actionTaken: false,
+                correctiveAction: correctiveAction,
+              };
+              newAlerts.unshift(newAlert);
+              updated = true;
+            }
+          }
+        });
+
+        return updated ? newAlerts : prev;
+      });
+    }
+  }, [warehouses, carbonThreshold]);
 
   // UI Navigation states
   const [activeTab, setActiveTab] = useState<string>('overview');
@@ -235,11 +292,29 @@ export default function App() {
     setAlerts((prev) =>
       prev.map((alt) => {
         if (alt.id === alertId) {
-          return { ...alt, actionTaken: true };
+          return { ...alt, actionTaken: true, title: alt.title.includes('[RESOLVED VIA AI]') ? alt.title : `${alt.title} [RESOLVED VIA AI]` };
         }
         return alt;
       })
     );
+
+    // If it is a sustainability critical facility alert, update the facility to be optimized and reduce emission intensity!
+    if (alertId.startsWith('sus-crit-')) {
+      const whId = alertId.replace('sus-crit-', '');
+      setWarehouses((prevWhs) =>
+        prevWhs.map((wh) => {
+          if (wh.id === whId) {
+            return {
+              ...wh,
+              filledPercent: Math.max(10, wh.filledPercent - 12), // Reduce occupancy to simulate stock rerouting
+              isOptimized: true,
+              activeIncidents: Math.max(0, wh.activeIncidents - 1),
+            };
+          }
+          return wh;
+        })
+      );
+    }
   };
 
   return (
@@ -326,6 +401,8 @@ export default function App() {
             <SustainabilityModule
               vehicles={vehicles}
               warehouses={warehouses}
+              carbonThreshold={carbonThreshold}
+              setCarbonThreshold={setCarbonThreshold}
             />
           )}
 

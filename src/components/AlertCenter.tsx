@@ -56,25 +56,49 @@ export default function AlertCenter({
             {activeAlerts.map(alert => (
               <div
                 key={alert.id}
-                className={`p-3.5 rounded-xl border space-y-3 transition-all ${getSeverityStyle(alert.severity)}`}
+                className={`p-3.5 rounded-xl border space-y-3 transition-all ${
+                  alert.module === 'sustainability'
+                    ? 'bg-accent-emerald/10 border-accent-emerald/30 text-accent-emerald'
+                    : getSeverityStyle(alert.severity)
+                }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-[9px] font-mono uppercase bg-white/10 px-1.5 py-0.2 rounded font-semibold text-white/80">
+                  <span className={`text-[9px] font-mono uppercase px-1.5 py-0.2 rounded font-semibold ${
+                    alert.module === 'sustainability'
+                      ? 'bg-accent-emerald/25 text-accent-emerald border border-accent-emerald/20'
+                      : 'bg-white/10 text-white/80'
+                  }`}>
                     {alert.module}
                   </span>
-                  <span className="text-[9px] font-mono opacity-60">
+                  <span className={`text-[9px] font-mono opacity-60 ${alert.module === 'sustainability' ? 'text-accent-emerald/80' : ''}`}>
                     {new Date(alert.timestamp).toLocaleTimeString()}
                   </span>
                 </div>
                 <div className="text-white font-medium text-[11px] leading-relaxed">
                   {alert.description}
                 </div>
+
+                {alert.correctiveAction && (
+                  <div className="p-2.5 bg-brand-black/40 border border-accent-emerald/20 rounded-lg text-left space-y-1">
+                    <div className="flex items-center gap-1 text-accent-emerald font-black text-[9px] uppercase tracking-wider">
+                      <Zap size={10} className="animate-pulse shrink-0" /> AI Recommended Action:
+                    </div>
+                    <p className="text-[10px] text-gray-300 leading-relaxed font-sans font-normal">
+                      {alert.correctiveAction}
+                    </p>
+                  </div>
+                )}
+
                 <div className="pt-2 border-t border-white/5 flex justify-end">
                   <button
                     onClick={() => onTakeActionOnAlert(alert.id)}
-                    className="px-3 py-1 bg-white/10 hover:bg-white/20 text-[10px] font-bold rounded-lg cursor-pointer"
+                    className={`px-3 py-1 text-[10px] font-bold rounded-lg cursor-pointer transition-all ${
+                      alert.module === 'sustainability'
+                        ? 'bg-accent-emerald text-brand-black hover:bg-accent-emerald/80'
+                        : 'bg-white/10 hover:bg-white/20 text-white'
+                    }`}
                   >
-                    Acknowledge & Mitigate
+                    {alert.module === 'sustainability' ? 'Execute AI Recommendation' : 'Acknowledge & Mitigate'}
                   </button>
                 </div>
               </div>

@@ -36,6 +36,8 @@ import { Vehicle, Warehouse as WarehouseType } from '../types';
 interface SustainabilityModuleProps {
   vehicles: Vehicle[];
   warehouses: WarehouseType[];
+  carbonThreshold?: number;
+  setCarbonThreshold?: (v: number) => void;
 }
 
 // Sub-tabs within the Sustainability Module
@@ -49,7 +51,12 @@ type SustainabilitySubTab =
   | 'reports'
   | 'advisor';
 
-export default function SustainabilityModule({ vehicles, warehouses }: SustainabilityModuleProps) {
+export default function SustainabilityModule({
+  vehicles,
+  warehouses,
+  carbonThreshold = 18.0,
+  setCarbonThreshold = () => {}
+}: SustainabilityModuleProps) {
   const [activeSubTab, setActiveSubTab] = useState<SustainabilitySubTab>('executive');
   const [isLiveTelemetry, setIsLiveTelemetry] = useState(true);
 
@@ -1039,26 +1046,72 @@ export default function SustainabilityModule({ vehicles, warehouses }: Sustainab
                     <p className="text-[9px] font-mono text-gray-400 mt-0.5">Real-time green scores per regional depot</p>
                   </div>
                   <span className="text-[8px] font-mono text-accent-emerald bg-accent-emerald/15 border border-accent-emerald/20 px-2 py-0.5 rounded font-bold">
-                    4 FACILITIES ONLINE
+                    {warehouses.length} FACILITIES ONLINE
                   </span>
+                </div>
+
+                {/* SLA Corporate Threshold Controller */}
+                <div className="bg-white/[0.02] border border-white/5 rounded-lg p-3.5 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-accent-emerald block">Corporate Carbon Intensity SLA Threshold</span>
+                    <p className="text-[9px] text-gray-400 mt-0.5">Alert triggers globally if any depot's carbon load exceeds this limit</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min="14.0"
+                      max="20.0"
+                      step="0.1"
+                      value={carbonThreshold}
+                      onChange={(e) => setCarbonThreshold(parseFloat(e.target.value))}
+                      className="w-32 accent-accent-emerald h-1 bg-white/10 rounded appearance-none cursor-pointer"
+                    />
+                    <span className="text-xs font-mono font-bold text-white bg-white/5 px-2.5 py-1 rounded border border-white/10">
+                      {carbonThreshold.toFixed(1)} Tons CO₂
+                    </span>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {warehouses.map((wh) => {
-                    const carbonEquivalent = 12.4 + (wh.filledPercent / 10);
+                    const carbonEquivalent = 12.4 + (wh.filledPercent / 10) - (wh.isOptimized ? 2.5 : 0);
                     const recycleRate = wh.filledPercent > 75 ? 85 : wh.filledPercent > 50 ? 72 : wh.filledPercent > 25 ? 65 : 45;
+                    const exceedsThreshold = carbonEquivalent > carbonThreshold;
 
                     return (
-                      <div key={wh.id} className="p-4 bg-white/[0.02] border border-white/5 rounded-lg flex flex-col justify-between">
-                        <div className="flex items-center justify-between">
-                          <h4 className="text-xs font-bold text-white uppercase">{wh.name}</h4>
-                          <span className="text-[9px] font-mono text-accent-cyan font-bold">{wh.location}</span>
+                      <div
+                        key={wh.id}
+                        className={`p-4 bg-white/[0.02] border rounded-lg flex flex-col justify-between transition-all ${
+                          exceedsThreshold
+                            ? 'border-accent-rose/40 bg-accent-rose/[0.02] shadow-lg shadow-accent-rose/5'
+                            : 'border-white/5'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex flex-col gap-1">
+                            <h4 className="text-xs font-bold text-white uppercase flex flex-wrap items-center gap-1.5 leading-tight">
+                              <span>{wh.name}</span>
+                              {wh.isOptimized && (
+                                <span className="text-[8px] font-mono font-bold bg-accent-emerald/15 border border-accent-emerald/30 text-accent-emerald px-1.5 py-0.2 rounded shrink-0">
+                                  ECO-OPTIMIZED
+                                </span>
+                              )}
+                            </h4>
+                            {exceedsThreshold && (
+                              <span className="text-[8px] font-mono font-semibold text-accent-rose uppercase tracking-wider">
+                                ⚠️ CROSSES THRESHOLD ({carbonEquivalent.toFixed(1)} &gt; {carbonThreshold.toFixed(1)} Tons)
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[9px] font-mono text-accent-cyan font-bold shrink-0">{wh.location}</span>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3 mt-3 text-[10px] font-mono text-gray-400">
+                        <div className="grid grid-cols-2 gap-3 mt-4 text-[10px] font-mono text-gray-400">
                           <div>
                             <span className="text-[8px] text-gray-500 block">Carbon Load</span>
-                            <span className="text-white font-bold">{carbonEquivalent.toFixed(1)} Tons</span>
+                            <span className={`font-bold ${exceedsThreshold ? 'text-accent-rose font-black' : 'text-white'}`}>
+                              {carbonEquivalent.toFixed(1)} Tons
+                            </span>
                           </div>
                           <div>
                             <span className="text-[8px] text-gray-500 block">Recycling Rate</span>

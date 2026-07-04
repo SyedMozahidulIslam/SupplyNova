@@ -56,6 +56,7 @@ export interface Warehouse {
   zoneCount: number;
   racksCount: number;
   activeIncidents: number;
+  isOptimized?: boolean;
   zones: {
     name: string;
     temperature: number;
@@ -197,8 +198,9 @@ export interface Alert {
   description: string;
   severity: 'critical' | 'warning' | 'info';
   timestamp: string;
-  module: 'procurement' | 'warehouse' | 'fleet' | 'coldchain' | 'sales' | 'general';
+  module: 'procurement' | 'warehouse' | 'fleet' | 'coldchain' | 'sales' | 'general' | 'sustainability';
   actionTaken: boolean;
+  correctiveAction?: string;
 }
 
 export interface FinancialRecord {

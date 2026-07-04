@@ -270,16 +270,20 @@ export default function DashboardOverview({
               <div
                 key={alert.id}
                 className={`p-3.5 rounded border border-white/10 flex items-start justify-between gap-4 transition-all border-l-4 ${
-                  alert.severity === 'critical'
+                  alert.module === 'sustainability'
+                    ? 'border-l-accent-emerald bg-accent-emerald/5'
+                    : alert.severity === 'critical'
                     ? 'border-l-accent-rose bg-accent-rose/5'
                     : alert.severity === 'warning'
                     ? 'border-l-accent-amber bg-accent-amber/5'
                     : 'border-l-gray-400 bg-white/5'
                 }`}
               >
-                <div className="flex items-start gap-3">
+                <div className="flex items-start gap-3 flex-1">
                   <div className={`p-2 rounded mt-0.5 ${
-                    alert.severity === 'critical'
+                    alert.module === 'sustainability'
+                      ? 'bg-accent-emerald/20 text-accent-emerald'
+                      : alert.severity === 'critical'
                       ? 'bg-accent-rose/20 text-accent-rose'
                       : alert.severity === 'warning'
                       ? 'bg-accent-amber/20 text-accent-amber'
@@ -287,14 +291,30 @@ export default function DashboardOverview({
                   }`}>
                     <AlertOctagon size={14} />
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <h4 className="text-xs font-black uppercase tracking-tight text-white">{alert.title}</h4>
-                      <span className="text-[9px] font-black bg-white/10 text-gray-300 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                        alert.module === 'sustainability'
+                          ? 'bg-accent-emerald/20 text-accent-emerald border border-accent-emerald/30'
+                          : 'bg-white/10 text-gray-300'
+                      }`}>
                         {alert.module}
                       </span>
                     </div>
                     <p className="text-xs text-gray-300 mt-1 leading-relaxed">{alert.description}</p>
+
+                    {alert.correctiveAction && (
+                      <div className="mt-3 p-3 bg-brand-black/40 border border-accent-emerald/25 rounded text-left space-y-1">
+                        <div className="flex items-center gap-1.5 text-accent-emerald font-black text-[10px] uppercase tracking-wider">
+                          <Zap size={12} className="animate-pulse shrink-0" /> AI Recommended Corrective Action Recommendation:
+                        </div>
+                        <p className="text-[11px] text-gray-300 leading-relaxed font-sans">
+                          {alert.correctiveAction}
+                        </p>
+                      </div>
+                    )}
+
                     <span className="text-[9px] font-mono text-gray-500 uppercase tracking-wider mt-1.5 block">
                       Triggered: {new Date(alert.timestamp).toLocaleTimeString()}
                     </span>
@@ -303,9 +323,13 @@ export default function DashboardOverview({
 
                 <button
                   onClick={() => onTakeActionOnAlert(alert.id)}
-                  className="px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 border border-white/10 text-[10px] font-black uppercase tracking-widest text-white cursor-pointer transition-all shrink-0 hover:border-white/30"
+                  className={`px-3 py-1.5 rounded border text-[10px] font-black uppercase tracking-widest cursor-pointer transition-all shrink-0 ${
+                    alert.module === 'sustainability'
+                      ? 'bg-accent-emerald hover:bg-accent-emerald/85 text-brand-black border-accent-emerald/20 font-black hover:border-accent-emerald/40'
+                      : 'bg-white/10 hover:bg-white/20 border-white/10 text-white hover:border-white/30'
+                  }`}
                 >
-                  Mitigate Alert
+                  {alert.module === 'sustainability' ? 'Execute AI Correction' : 'Mitigate Alert'}
                 </button>
               </div>
             ))}
