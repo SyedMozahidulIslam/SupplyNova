@@ -23,7 +23,11 @@ import {
   ShoppingBag,
   Info,
   ShieldAlert,
-  ArrowRight
+  ArrowRight,
+  Target,
+  Edit3,
+  Trophy,
+  Award
 } from 'lucide-react';
 import {
   AreaChart,
@@ -37,6 +41,7 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
+import { motion, AnimatePresence } from 'motion/react';
 import { BeatPlan, Outlet, Employee } from '../types';
 import { OUTLETS } from '../data/mockData';
 
@@ -206,8 +211,191 @@ export default function SalesForceModule({
   const activeBeat = beatPlans.find(b => b.id === selectedBeatId) || beatPlans[0];
   const activeHoliday = HOLIDAYS.find(h => h.id === selectedHolidayId) || HOLIDAYS[0];
 
-  // Reset order collected for local computation or read total collected
+  // Date range filter states for order collected trend chart
+  const [dateFilter, setDateFilter] = useState<string>('all');
+  const [customStartDate, setCustomStartDate] = useState<string>('2026-06-01');
+  const [customEndDate, setCustomEndDate] = useState<string>('2026-07-04');
+
+  // Filter beat plans dynamically by the selected date range
+  const filteredBeatPlans = beatPlans.filter(bp => {
+    if (dateFilter === 'all') return true;
+    
+    const bpDate = new Date(bp.date);
+    const currentDate = new Date('2026-07-04');
+    
+    if (dateFilter === 'today') {
+      return bp.date === '2026-07-03' || bp.date === '2026-07-04';
+    }
+    
+    if (dateFilter === 'last-7-days') {
+      const diffTime = Math.abs(currentDate.getTime() - bpDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays <= 7;
+    }
+    
+    if (dateFilter === 'july-2026') {
+      return bp.date.startsWith('2026-07');
+    }
+    
+    if (dateFilter === 'june-2026') {
+      return bp.date.startsWith('2026-06');
+    }
+    
+    if (dateFilter === 'may-2026') {
+      return bp.date.startsWith('2026-05');
+    }
+    
+    if (dateFilter === 'q2-2026') {
+      return bp.date.startsWith('2026-04') || bp.date.startsWith('2026-05') || bp.date.startsWith('2026-06');
+    }
+    
+    if (dateFilter === 'custom') {
+      if (!customStartDate || !customEndDate) return true;
+      return bp.date >= customStartDate && bp.date <= customEndDate;
+    }
+    
+    return true;
+  });
+
+  // Aggregate orders and visits by sales representative name for correct charting
+  const beatChartData = filteredBeatPlans.reduce((acc, bp) => {
+    const existing = acc.find(item => item.name === bp.salesRepName);
+    if (existing) {
+      existing.amount += bp.orderCollectedBDT;
+      existing.visited += bp.outletsVisited;
+      existing.total += bp.totalOutlets;
+    } else {
+      acc.push({
+        name: bp.salesRepName,
+        amount: bp.orderCollectedBDT,
+        visited: bp.outletsVisited,
+        total: bp.totalOutlets
+      });
+    }
+    return acc;
+  }, [] as { name: string; amount: number; visited: number; total: number }[]);
+
+  // Total collected and overall average
   const totalCollected = beatPlans.reduce((sum, b) => sum + b.orderCollectedBDT, 0);
+  const totalFilteredCollected = filteredBeatPlans.reduce((sum, b) => sum + b.orderCollectedBDT, 0);
+
+  // Dynamically extract unique representative IDs
+  const uniqueRepIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    beatPlans.forEach(bp => {
+      if (bp.salesRepId) ids.add(bp.salesRepId);
+    });
+    return Array.from(ids);
+  }, [beatPlans]);
+
+  // Track selected reps for side-by-side comparison
+  const [comparedRepIds, setComparedRepIds] = useState<string[]>([]);
+
+  // Individual sales agent targets: keyed by salesRepId or salesRepName
+  const [agentTargets, setAgentTargets] = useState<Record<string, {
+    orderTargetBDT: number;
+    checkinTarget: number;
+    velocityTarget: number;
+  }>>({
+    'emp-10': { orderTargetBDT: 600000, checkinTarget: 5, velocityTarget: 120000 },
+    'emp-20': { orderTargetBDT: 400000, checkinTarget: 4, velocityTarget: 80000 },
+    'emp-30': { orderTargetBDT: 500000, checkinTarget: 3, velocityTarget: 150000 },
+  });
+
+  const [isEditingTargets, setIsEditingTargets] = useState(false);
+
+  // Automatically initialize selected reps
+  useEffect(() => {
+    if (comparedRepIds.length === 0 && uniqueRepIds.length > 0) {
+      setComparedRepIds(uniqueRepIds);
+    }
+  }, [uniqueRepIds]);
+
+  // Aggregate stats across all historical beats for comparison
+  const agentPerformanceStats = React.useMemo(() => {
+    const statsMap: Record<string, {
+      salesRepId: string;
+      salesRepName: string;
+      totalOrdersBDT: number;
+      completedCheckins: number;
+      totalOutletsVisited: number;
+      totalOutletsAssigned: number;
+      beatCount: number;
+    }> = {};
+
+    beatPlans.forEach((bp) => {
+      const key = bp.salesRepId || bp.salesRepName;
+      if (!statsMap[key]) {
+        statsMap[key] = {
+          salesRepId: bp.salesRepId,
+          salesRepName: bp.salesRepName,
+          totalOrdersBDT: 0,
+          completedCheckins: 0,
+          totalOutletsVisited: 0,
+          totalOutletsAssigned: 0,
+          beatCount: 0
+        };
+      }
+      
+      statsMap[key].totalOrdersBDT += bp.orderCollectedBDT;
+      if (bp.geoCheckIn) {
+        statsMap[key].completedCheckins += 1;
+      }
+      statsMap[key].totalOutletsVisited += bp.outletsVisited;
+      statsMap[key].totalOutletsAssigned += bp.totalOutlets;
+      statsMap[key].beatCount += 1;
+    });
+
+    const repsList = Object.values(statsMap).map(rep => {
+      const id = rep.salesRepId || rep.salesRepName;
+      const target = agentTargets[id] || { orderTargetBDT: 450000, checkinTarget: 4, velocityTarget: 100000 };
+
+      // average collection velocity (orders collected / completed check-ins)
+      const velocityPerCheckin = rep.completedCheckins > 0 
+        ? Math.round(rep.totalOrdersBDT / rep.completedCheckins) 
+        : 0;
+      
+      const velocityPerVisit = rep.totalOutletsVisited > 0
+        ? Math.round(rep.totalOrdersBDT / rep.totalOutletsVisited)
+        : 0;
+
+      const coverageRate = rep.totalOutletsAssigned > 0
+        ? Math.round((rep.totalOutletsVisited / rep.totalOutletsAssigned) * 100)
+        : 0;
+
+      // Calculate progress percentages against targets
+      const orderProgress = target.orderTargetBDT > 0
+        ? Math.round((rep.totalOrdersBDT / target.orderTargetBDT) * 100)
+        : 0;
+
+      const checkinProgress = target.checkinTarget > 0
+        ? Math.round((rep.completedCheckins / target.checkinTarget) * 100)
+        : 0;
+
+      const velocityProgress = target.velocityTarget > 0
+        ? Math.round((velocityPerCheckin / target.velocityTarget) * 100)
+        : 0;
+
+      return {
+        ...rep,
+        velocityPerCheckin,
+        velocityPerVisit,
+        coverageRate,
+        target,
+        orderProgress,
+        checkinProgress,
+        velocityProgress
+      };
+    });
+
+    // Sort by totalOrdersBDT descending and assign rank
+    return repsList
+      .sort((a, b) => b.totalOrdersBDT - a.totalOrdersBDT)
+      .map((rep, index) => ({
+        ...rep,
+        rank: index + 1
+      }));
+  }, [beatPlans, agentTargets]);
 
   // Dynamic calculations for Seasonal Demand Planner
   const currentHolidayMultipliers = multipliers[selectedHolidayId] || {};
@@ -467,40 +655,814 @@ export default function SalesForceModule({
 
       {/* VIEW 1: FIELD BEATS AND OPERATIONS */}
       {activeTab === 'beats' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Active Beat Details */}
-          <div className="lg:col-span-2 p-6 rounded-2xl bg-white/[0.02] p-6 rounded-2xl bg-white/[0.02] border border-white/5 space-y-6">
-            <div className="flex items-center justify-between border-b border-white/5 pb-4">
+        <div className="space-y-6">
+          {/* Beat Plan Summary Analytics Chart */}
+          <div className="bg-white/[0.02] p-6 rounded-2xl border border-white/5 space-y-4">
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-white/5 pb-4">
               <div>
-                <span className="text-[10px] font-mono text-accent-cyan uppercase">Active Beat Representative</span>
-                <div className="flex items-center gap-2 mt-1">
-                  <h3 className="text-sm font-bold text-white">{activeBeat.salesRepName}</h3>
-                  <span className="bg-white/5 border border-white/10 rounded p-1 text-[9px] text-gray-400 font-mono">
-                    ID: {activeBeat.salesRepId}
-                  </span>
-                </div>
+                <h3 className="text-base font-black text-white uppercase tracking-wider font-display flex items-center gap-2">
+                  <TrendingUp size={16} className="text-accent-cyan" /> Beat Plans Order Collection Trends
+                </h3>
+                <p className="text-[10px] text-gray-400 font-mono uppercase tracking-wider mt-0.5">
+                  Real-time visualization of wholesale orders collected (BDT) per active agent beat plan
+                </p>
               </div>
-              <div className="text-right">
-                <span className="text-[9px] font-mono text-white/40 block">TARGET COVERAGE PROGRESS</span>
-                <span className="text-xs font-mono font-bold text-accent-emerald">
-                  {activeBeat.outletsVisited} / {activeBeat.totalOutlets} Visited
-                </span>
+
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Date Filter Dropdown */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono text-gray-400 uppercase">Period:</span>
+                  <select
+                    value={dateFilter}
+                    onChange={(e) => setDateFilter(e.target.value)}
+                    className="bg-brand-black border border-white/10 rounded px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-accent-cyan cursor-pointer"
+                  >
+                    <option value="all">All Time (Historical)</option>
+                    <option value="today">Today / Latest (Jul 3-4)</option>
+                    <option value="last-7-days">Last 7 Days</option>
+                    <option value="july-2026">July 2026</option>
+                    <option value="june-2026">June 2026</option>
+                    <option value="may-2026">May 2026</option>
+                    <option value="q2-2026">Q2 2026 (Apr - Jun)</option>
+                    <option value="custom">📅 Custom Date Range...</option>
+                  </select>
+                </div>
+
+                {/* Custom Date Inputs */}
+                {dateFilter === 'custom' && (
+                  <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded px-2 py-1">
+                    <input
+                      type="date"
+                      value={customStartDate}
+                      onChange={(e) => setCustomStartDate(e.target.value)}
+                      className="bg-transparent text-white text-xs font-mono focus:outline-none cursor-pointer"
+                    />
+                    <span className="text-gray-500 font-mono text-[10px]">to</span>
+                    <input
+                      type="date"
+                      value={customEndDate}
+                      onChange={(e) => setCustomEndDate(e.target.value)}
+                      className="bg-transparent text-white text-xs font-mono focus:outline-none cursor-pointer"
+                    />
+                  </div>
+                )}
+
+                <div className="bg-white/5 border border-white/10 rounded px-2.5 py-1 text-[10px] font-bold text-accent-cyan">
+                  Avg. Filtered Collection: ৳{(filteredBeatPlans.length > 0 ? Math.round(totalFilteredCollected / filteredBeatPlans.length) : 0).toLocaleString()} BDT
+                </div>
               </div>
             </div>
 
-            {/* Dropdown for active Beat */}
-            <div className="flex items-center justify-between bg-white/[0.01] border border-white/5 p-3 rounded-xl gap-2">
-              <span className="text-xs font-bold text-white/70">Select Agent Beat:</span>
-              <select
-                value={selectedBeatId}
-                onChange={(e) => setSelectedBeatId(e.target.value)}
-                className="bg-white/5 border border-white/10 rounded p-2 px-3 text-xs font-bold uppercase tracking-wider text-white focus:outline-none focus:border-accent-cyan cursor-pointer"
-              >
-                {beatPlans.map(b => (
-                  <option key={b.id} value={b.id} className="bg-brand-black">Beat: {b.salesRepName}</option>
-                ))}
-              </select>
+            <div className="h-64 w-full pt-4 relative">
+              {beatChartData.length === 0 ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/[0.01] border border-dashed border-white/10 rounded-2xl p-6">
+                  <Calendar className="text-gray-600 mb-2 animate-pulse" size={32} />
+                  <p className="text-xs font-mono text-gray-400 uppercase tracking-wider">No Beat Records Found</p>
+                  <p className="text-[10px] text-gray-500 mt-1">Try expanding your selected time period or change the date range filter.</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={beatChartData}
+                    margin={{ top: 10, right: 10, left: 10, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                    <XAxis 
+                      dataKey="name" 
+                      stroke="rgba(255,255,255,0.3)" 
+                      fontSize={10} 
+                      fontClassName="font-mono" 
+                      tickLine={false} 
+                    />
+                    <YAxis 
+                      stroke="rgba(255,255,255,0.3)" 
+                      fontSize={10} 
+                      fontClassName="font-mono" 
+                      tickLine={false} 
+                      tickFormatter={(val) => `৳${(val / 1000).toFixed(0)}k`} 
+                    />
+                    <Tooltip
+                      formatter={(value: any) => [`৳${Number(value).toLocaleString()} BDT`, "Collected Order"]}
+                      labelFormatter={(label) => `Representative: ${label}`}
+                      contentStyle={{
+                        backgroundColor: '#0a0a0a',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '12px',
+                        color: '#fff',
+                        fontFamily: 'monospace',
+                        fontSize: '11px'
+                      }}
+                    />
+                    <Bar 
+                      dataKey="amount" 
+                      fill="#06b6d4" 
+                      radius={[4, 4, 0, 0]} 
+                      maxBarSize={45}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
+
+            {/* Quick SFA Performance Insights */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+              <div className="bg-white/[0.01] border border-white/5 p-3 rounded-xl space-y-1">
+                <span className="text-gray-500 text-[9px] uppercase font-mono block">Top Performing Beat</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white">
+                    {filteredBeatPlans.length > 0 
+                      ? [...filteredBeatPlans].sort((a,b) => b.orderCollectedBDT - a.orderCollectedBDT)[0]?.salesRepName 
+                      : 'N/A'}
+                  </span>
+                  <span className="text-xs font-mono font-bold text-accent-emerald">
+                    ৳{filteredBeatPlans.length > 0 
+                      ? [...filteredBeatPlans].sort((a,b) => b.orderCollectedBDT - a.orderCollectedBDT)[0]?.orderCollectedBDT.toLocaleString() 
+                      : '0'} BDT
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-white/[0.01] border border-white/5 p-3 rounded-xl space-y-1">
+                <span className="text-gray-500 text-[9px] uppercase font-mono block">Least Active Beat</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white">
+                    {filteredBeatPlans.length > 0 
+                      ? [...filteredBeatPlans].sort((a,b) => a.orderCollectedBDT - b.orderCollectedBDT)[0]?.salesRepName 
+                      : 'N/A'}
+                  </span>
+                  <span className="text-xs font-mono font-bold text-accent-rose">
+                    ৳{filteredBeatPlans.length > 0 
+                      ? [...filteredBeatPlans].sort((a,b) => a.orderCollectedBDT - b.orderCollectedBDT)[0]?.orderCollectedBDT.toLocaleString() 
+                      : '0'} BDT
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-white/[0.01] border border-white/5 p-3 rounded-xl space-y-1">
+                <span className="text-gray-500 text-[9px] uppercase font-mono block">SFA Field Target Efficiency</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white">
+                    Average Visited Outlets
+                  </span>
+                  <span className="text-xs font-mono font-bold text-accent-cyan">
+                    {filteredBeatPlans.length > 0 
+                      ? (filteredBeatPlans.reduce((sum, b) => sum + (b.outletsVisited / b.totalOutlets), 0) / filteredBeatPlans.length * 100).toFixed(1) 
+                      : '0.0'}%
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* SFA Top Performers Leaderboard */}
+          <div className="bg-gradient-to-r from-yellow-500/[0.03] via-white/[0.01] to-transparent p-6 rounded-2xl border border-white/5 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4">
+              <div>
+                <h3 className="text-base font-black text-white uppercase tracking-wider font-display flex items-center gap-2">
+                  <Trophy size={18} className="text-yellow-400 animate-pulse" /> SFA Top Performers Leaderboard
+                </h3>
+                <p className="text-[10px] text-gray-400 font-mono uppercase tracking-wider mt-0.5">
+                  Honoring high-achieving field personnel based on total order collection volume
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs font-mono text-gray-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-ping" />
+                <span className="text-yellow-400 font-bold uppercase tracking-wider text-[10px]">Recognizing Top 3 Personnel</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {agentPerformanceStats.slice(0, 3).map((rep, idx) => {
+                const id = rep.salesRepId || rep.salesRepName;
+                const isSelected = comparedRepIds.includes(id);
+
+                // Rank styling configs
+                const rankConfigs = [
+                  {
+                    color: 'from-yellow-400 to-amber-500 text-yellow-400',
+                    bg: 'bg-yellow-400/5 border-yellow-400/20',
+                    badge: '🏆 Rank #1 Gold',
+                    avatar: 'border-yellow-400/50 bg-yellow-400/10 text-yellow-400'
+                  },
+                  {
+                    color: 'from-slate-300 to-slate-500 text-slate-300',
+                    bg: 'bg-slate-300/5 border-slate-300/20',
+                    badge: '🥈 Rank #2 Silver',
+                    avatar: 'border-slate-300/50 bg-slate-300/10 text-slate-300'
+                  },
+                  {
+                    color: 'from-amber-600 to-amber-800 text-amber-500',
+                    bg: 'bg-amber-600/5 border-amber-600/20',
+                    badge: '🥉 Rank #3 Bronze',
+                    avatar: 'border-amber-600/50 bg-amber-600/10 text-amber-500'
+                  }
+                ];
+
+                const cfg = rankConfigs[idx] || rankConfigs[2];
+
+                return (
+                  <div 
+                    key={id}
+                    className={`relative bg-white/[0.01] border ${
+                      isSelected ? 'border-accent-cyan bg-accent-cyan/[0.01]' : 'border-white/5'
+                    } hover:border-white/10 p-5 rounded-2xl flex flex-col justify-between space-y-4 transition-all hover:-translate-y-0.5`}
+                  >
+                    {/* Rank Badge */}
+                    <div className="absolute top-4 right-4">
+                      <span className={`px-2 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider border bg-black/40 ${cfg.bg} ${cfg.color}`}>
+                        {cfg.badge}
+                      </span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {/* Avatar & Info */}
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-xl border flex items-center justify-center font-black text-xs uppercase ${cfg.avatar}`}>
+                          {rep.salesRepName.split(' ').map(n => n[0]).join('')}
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-white leading-snug">{rep.salesRepName}</h4>
+                          <span className="text-[9px] font-mono text-gray-500 uppercase">ID: {rep.salesRepId}</span>
+                        </div>
+                      </div>
+
+                      {/* Performance Metric block */}
+                      <div className="bg-white/[0.01] p-3 rounded-xl border border-white/[0.03] space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-[9px] font-mono text-gray-400 uppercase">Collected</span>
+                          <span className="font-mono text-accent-emerald font-black">৳{rep.totalOrdersBDT.toLocaleString()}</span>
+                        </div>
+                        
+                        {/* Target Progress */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-[9px] font-mono">
+                            <span className="text-gray-500">Goal Progress</span>
+                            <span className={rep.orderProgress >= 100 ? 'text-accent-emerald font-bold' : 'text-gray-400'}>
+                              {rep.orderProgress}%
+                            </span>
+                          </div>
+                          <div className="w-full bg-white/5 rounded-full h-1 overflow-hidden">
+                            <div 
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                rep.orderProgress >= 100 ? 'bg-gradient-to-r from-accent-emerald to-emerald-400' : 'bg-accent-cyan'
+                              }`} 
+                              style={{ width: `${Math.min(100, rep.orderProgress)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Scorecard lists */}
+                      <div className="space-y-1.5 text-[10px] text-gray-400">
+                        <div className="flex items-center justify-between border-b border-white/[0.02] pb-1">
+                          <span>Beats Visited:</span>
+                          <span className="font-mono text-white font-bold">{rep.totalOutletsVisited} stores</span>
+                        </div>
+                        <div className="flex items-center justify-between border-b border-white/[0.02] pb-1">
+                          <span>Coverage Efficiency:</span>
+                          <span className="font-mono text-accent-cyan font-bold">{rep.coverageRate}%</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span>Avg Velocity:</span>
+                          <span className="font-mono text-white">৳{rep.velocityPerCheckin.toLocaleString()} / check-in</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-white/5 flex items-center justify-between">
+                      <span className="text-[9px] font-mono text-gray-500">
+                        Ranked #{idx + 1} Overall
+                      </span>
+                      <button
+                        onClick={() => {
+                          setComparedRepIds(prev => 
+                            prev.includes(id)
+                              ? prev.filter(item => item !== id)
+                              : [...prev, id]
+                          );
+                        }}
+                        className={`text-[9px] font-mono font-bold cursor-pointer flex items-center gap-1 px-2 py-0.5 rounded transition-colors ${
+                          isSelected 
+                            ? 'bg-accent-cyan/15 text-accent-cyan border border-accent-cyan/30' 
+                            : 'bg-white/5 hover:bg-white/10 text-white/70 hover:text-white'
+                        }`}
+                      >
+                        {isSelected ? 'Deselect' : 'Compare'} <ArrowRight size={8} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Side-by-Side Sales Agent Comparison */}
+          <div className="bg-white/[0.02] p-6 rounded-2xl border border-white/5 space-y-6">
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-white/5 pb-4">
+              <div>
+                <h3 className="text-base font-black text-white uppercase tracking-wider font-display flex items-center gap-2">
+                  <Users size={18} className="text-accent-cyan" /> Sales Agents Performance Comparator & Targets
+                </h3>
+                <p className="text-[10px] text-gray-400 font-mono uppercase tracking-wider mt-0.5">
+                  Side-by-side performance audit, aggregate wholesale collection, check-ins, and target achievement velocity
+                </p>
+              </div>
+
+              {/* Controls and Select Reps Multi-Toggle */}
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Config Targets Trigger */}
+                <button
+                  onClick={() => setIsEditingTargets(!isEditingTargets)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono border transition-all cursor-pointer flex items-center gap-1.5 ${
+                    isEditingTargets
+                      ? 'bg-accent-cyan/20 border-accent-cyan text-accent-cyan font-bold'
+                      : 'bg-white/5 border-white/10 text-white/75 hover:bg-white/10 hover:text-white'
+                  }`}
+                >
+                  <Target size={14} className={isEditingTargets ? 'animate-spin' : ''} />
+                  {isEditingTargets ? 'Close Targets Editor' : '🎯 Configure Targets'}
+                </button>
+
+                <div className="h-4 w-px bg-white/10 hidden sm:block" />
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-mono text-gray-400 uppercase">Compare:</span>
+                  {agentPerformanceStats.map(rep => {
+                    const id = rep.salesRepId || rep.salesRepName;
+                    const isSelected = comparedRepIds.includes(id);
+                    return (
+                      <button
+                        key={id}
+                        onClick={() => {
+                          setComparedRepIds(prev => 
+                            prev.includes(id)
+                              ? prev.filter(item => item !== id)
+                              : [...prev, id]
+                          );
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-mono border transition-all cursor-pointer flex items-center gap-1.5 ${
+                          isSelected
+                            ? 'bg-accent-cyan/10 border-accent-cyan text-accent-cyan font-bold'
+                            : 'bg-white/5 border-white/10 text-white/50 hover:text-white hover:bg-white/10'
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-accent-cyan' : 'bg-white/20'}`} />
+                        {rep.salesRepName}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Target Settings Configuration panel */}
+            {isEditingTargets && (
+              <div className="bg-white/[0.03] border border-white/10 p-5 rounded-xl space-y-4 animate-fadeIn">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-2">
+                  <span className="text-xs font-bold text-accent-cyan font-mono uppercase tracking-wider flex items-center gap-1.5">
+                    <Sliders size={14} /> Adjust Agent SFA Target Thresholds
+                  </span>
+                  <span className="text-[10px] text-gray-500 font-mono">Changes apply globally and instantly update progress meters</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {agentPerformanceStats.map(rep => {
+                    const id = rep.salesRepId || rep.salesRepName;
+                    const target = agentTargets[id] || { orderTargetBDT: 450000, checkinTarget: 4, velocityTarget: 100000 };
+                    return (
+                      <div key={id} className="bg-brand-black/50 border border-white/5 p-4 rounded-xl space-y-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded bg-accent-cyan/10 border border-accent-cyan/20 flex items-center justify-center font-bold text-[10px] text-accent-cyan uppercase">
+                            {rep.salesRepName.split(' ').map(n => n[0]).join('')}
+                          </div>
+                          <span className="text-xs font-bold text-white">{rep.salesRepName}</span>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-mono text-gray-400 block uppercase">Order Collection Goal (BDT)</label>
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-1.5 text-[10px] text-gray-500">৳</span>
+                              <input
+                                type="number"
+                                value={target.orderTargetBDT}
+                                onChange={(e) => {
+                                  const val = Math.max(0, parseInt(e.target.value) || 0);
+                                  setAgentTargets(prev => ({
+                                    ...prev,
+                                    [id]: { ...target, orderTargetBDT: val }
+                                  }));
+                                }}
+                                className="w-full bg-brand-black border border-white/10 rounded pl-6 pr-2 py-1 text-xs text-white font-mono focus:outline-none focus:border-accent-cyan"
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-mono text-gray-400 block uppercase">Check-ins Goal</label>
+                            <input
+                              type="number"
+                              value={target.checkinTarget}
+                              onChange={(e) => {
+                                const val = Math.max(0, parseInt(e.target.value) || 0);
+                                setAgentTargets(prev => ({
+                                  ...prev,
+                                  [id]: { ...target, checkinTarget: val }
+                                }));
+                              }}
+                              className="w-full bg-brand-black border border-white/10 rounded px-2.5 py-1 text-xs text-white font-mono focus:outline-none focus:border-accent-cyan"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-mono text-gray-400 block uppercase">Velocity Goal (BDT / Check-in)</label>
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-1.5 text-[10px] text-gray-500">৳</span>
+                              <input
+                                type="number"
+                                value={target.velocityTarget}
+                                onChange={(e) => {
+                                  const val = Math.max(0, parseInt(e.target.value) || 0);
+                                  setAgentTargets(prev => ({
+                                    ...prev,
+                                    [id]: { ...target, velocityTarget: val }
+                                  }));
+                                }}
+                                className="w-full bg-brand-black border border-white/10 rounded pl-6 pr-2 py-1 text-xs text-white font-mono focus:outline-none focus:border-accent-cyan"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Table and Cards Display */}
+            {comparedRepIds.length === 0 ? (
+              <div className="text-center py-12 bg-white/[0.01] border border-dashed border-white/10 rounded-xl space-y-2">
+                <Users className="text-gray-600 mx-auto animate-pulse" size={32} />
+                <p className="text-xs font-mono text-gray-400 uppercase tracking-wider">No Agents Selected for Comparison</p>
+                <p className="text-[10px] text-gray-500">Toggle agent buttons above to load side-by-side performance cards.</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Responsive Side-by-Side Grid Cards with Targets */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {agentPerformanceStats
+                    .filter(rep => comparedRepIds.includes(rep.salesRepId || rep.salesRepName))
+                    .map(rep => {
+                      const id = rep.salesRepId || rep.salesRepName;
+                      // Determine performance badge based on collection velocity per check-in
+                      const isElite = rep.velocityPerCheckin >= rep.target.velocityTarget;
+                      const isStrong = rep.velocityPerCheckin >= rep.target.velocityTarget * 0.75 && rep.velocityPerCheckin < rep.target.velocityTarget;
+                      const badgeColor = isElite 
+                        ? 'bg-accent-emerald/10 border-accent-emerald text-accent-emerald' 
+                        : isStrong 
+                        ? 'bg-accent-cyan/10 border-accent-cyan text-accent-cyan' 
+                        : 'bg-accent-rose/10 border-accent-rose text-accent-rose';
+                      
+                      const badgeText = isElite 
+                        ? '🏆 Target Met' 
+                        : isStrong 
+                        ? '⚡ Exceeding 75%' 
+                        : '⏱️ Behind Target';
+
+                      const activeBeatRecord = beatPlans.find(b => b.salesRepId === rep.salesRepId && b.geoCheckIn && !b.geoCheckOut);
+
+                      // Dynamic color for order progress
+                      const orderColor = rep.orderProgress >= 100 
+                        ? 'bg-accent-emerald' 
+                        : rep.orderProgress >= 50 
+                        ? 'bg-accent-amber' 
+                        : 'bg-accent-rose';
+
+                      // Dynamic color for check-in progress
+                      const checkinColor = rep.checkinProgress >= 100 
+                        ? 'bg-accent-emerald' 
+                        : rep.checkinProgress >= 50 
+                        ? 'bg-accent-amber' 
+                        : 'bg-accent-rose';
+
+                      return (
+                        <div 
+                          key={id} 
+                          className="bg-white/[0.01] border border-white/5 hover:border-white/10 rounded-2xl p-5 space-y-4 transition-all relative flex flex-col justify-between"
+                        >
+                          <div className="space-y-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent-cyan/20 to-accent-blue/20 border border-white/10 flex items-center justify-center font-bold text-accent-cyan uppercase">
+                                  {rep.salesRepName.split(' ').map(n => n[0]).join('')}
+                                </div>
+                                <div>
+                                  <h4 className="text-sm font-bold text-white leading-snug flex items-center gap-1">
+                                    {rep.rank === 1 && <span title="1st Place Performer" className="text-xs">🏆</span>}
+                                    {rep.rank === 2 && <span title="2nd Place Performer" className="text-xs">🥈</span>}
+                                    {rep.rank === 3 && <span title="3rd Place Performer" className="text-xs">🥉</span>}
+                                    {rep.salesRepName}
+                                  </h4>
+                                  <span className="text-[9px] font-mono text-gray-500 block uppercase">ID: {rep.salesRepId}</span>
+                                </div>
+                              </div>
+                              <span className={`px-2 py-0.5 rounded text-[8px] font-bold border uppercase tracking-wider ${badgeColor} shrink-0`}>
+                                {badgeText}
+                              </span>
+                            </div>
+
+                            {/* Orders Collected vs Target */}
+                            <div className="bg-white/[0.01] p-3 rounded-xl border border-white/[0.03] space-y-2">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-[10px] font-mono text-gray-400 uppercase">Order Progress</span>
+                                <span className="font-mono text-white font-bold">{rep.orderProgress}%</span>
+                              </div>
+                              <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
+                                <div 
+                                  className={`${orderColor} h-full rounded-full transition-all duration-500`} 
+                                  style={{ width: `${Math.min(100, rep.orderProgress)}%` }}
+                                />
+                              </div>
+                              <div className="flex items-center justify-between text-[9px] font-mono text-gray-500">
+                                <span>Collected: <strong className="text-accent-emerald">৳{rep.totalOrdersBDT.toLocaleString()}</strong></span>
+                                <span>Goal: ৳{rep.target.orderTargetBDT.toLocaleString()}</span>
+                              </div>
+                            </div>
+
+                            {/* Check-ins vs Target */}
+                            <div className="bg-white/[0.01] p-3 rounded-xl border border-white/[0.03] space-y-2">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-[10px] font-mono text-gray-400 uppercase">Check-ins Progress</span>
+                                <span className="font-mono text-white font-bold">{rep.checkinProgress}%</span>
+                              </div>
+                              <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
+                                <div 
+                                  className={`${checkinColor} h-full rounded-full transition-all duration-500`} 
+                                  style={{ width: `${Math.min(100, rep.checkinProgress)}%` }}
+                                />
+                              </div>
+                              <div className="flex items-center justify-between text-[9px] font-mono text-gray-500">
+                                <span>Actual: <strong className="text-white">{rep.completedCheckins} / {rep.beatCount}</strong></span>
+                                <span>Goal: {rep.target.checkinTarget} Check-ins</span>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2 text-xs">
+                              {/* Metric lines */}
+                              <div className="flex items-center justify-between border-b border-white/[0.03] pb-1.5">
+                                <span className="text-gray-400">Total Outlets Visited:</span>
+                                <span className="font-mono text-white font-bold">{rep.totalOutletsVisited} stores</span>
+                              </div>
+                              
+                              <div className="flex items-center justify-between border-b border-white/[0.03] pb-1.5">
+                                <span className="text-gray-400">Beat Coverage Rate:</span>
+                                <div className="flex items-center gap-1.5">
+                                  <div className="w-16 bg-white/10 rounded-full h-1.5 overflow-hidden">
+                                    <div 
+                                      className="bg-accent-cyan h-full rounded-full" 
+                                      style={{ width: `${rep.coverageRate}%` }}
+                                    />
+                                  </div>
+                                  <span className="font-mono text-accent-cyan font-bold">{rep.coverageRate}%</span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between border-b border-white/[0.03] pb-1.5">
+                                <span className="text-gray-400">Collection Velocity:</span>
+                                <div className="text-right">
+                                  <div className="flex items-center gap-1.5 justify-end">
+                                    <span className="font-mono text-accent-cyan font-black">৳{rep.velocityPerCheckin.toLocaleString()} / Check-in</span>
+                                    <span className={`px-1 py-0.5 rounded text-[8px] font-bold ${
+                                      rep.velocityProgress >= 100 ? 'bg-accent-emerald/10 text-accent-emerald' : 'bg-accent-amber/10 text-accent-amber'
+                                    }`}>
+                                      {rep.velocityProgress}% Goal
+                                    </span>
+                                  </div>
+                                  <span className="text-[9px] font-mono text-gray-500 block mt-0.5">Target Velocity: ৳{rep.target.velocityTarget.toLocaleString()} / Check-in</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="pt-3 border-t border-t-white/5 mt-2 flex items-center justify-between">
+                            <span className="text-[10px] text-gray-500 font-mono">
+                              {activeBeatRecord ? '🟢 Live Beat Active' : '⚪ Beat Complete / Standby'}
+                            </span>
+                            <button
+                              onClick={() => {
+                                const associatedBeat = beatPlans.find(b => b.salesRepId === rep.salesRepId);
+                                if (associatedBeat) {
+                                  setSelectedBeatId(associatedBeat.id);
+                                }
+                              }}
+                              className="text-[10px] font-mono font-bold text-accent-cyan hover:underline cursor-pointer flex items-center gap-1"
+                            >
+                              Select Beat <ArrowRight size={10} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+
+                {/* Dense Comparison Matrix / Table with custom Goal / Target Highlighting */}
+                <div className="overflow-x-auto bg-white/[0.01] border border-white/5 rounded-2xl">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/5 bg-white/[0.02] text-[10px] font-mono text-gray-400 uppercase tracking-wider">
+                        <th className="p-4 font-bold">Representative Name</th>
+                        <th className="p-4 font-bold text-right">Total Collected vs Goal</th>
+                        <th className="p-4 font-bold text-right">Completed Check-Ins vs Goal</th>
+                        <th className="p-4 font-bold text-right">Stores Visited</th>
+                        <th className="p-4 font-bold text-right text-accent-cyan">Velocity (৳ / Check-in)</th>
+                        <th className="p-4 font-bold text-right">Coverage Efficiency</th>
+                        <th className="p-4 font-bold text-center">Goal Status summary</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/[0.03] text-xs font-mono">
+                      {agentPerformanceStats.map(rep => {
+                        const id = rep.salesRepId || rep.salesRepName;
+                        const isSelected = comparedRepIds.includes(id);
+
+                        // Highlight cells based on target completion
+                        const orderTargetMet = rep.orderProgress >= 100;
+                        const checkinTargetMet = rep.checkinProgress >= 100;
+                        const velocityTargetMet = rep.velocityProgress >= 100;
+
+                        let metCount = 0;
+                        if (orderTargetMet) metCount++;
+                        if (checkinTargetMet) metCount++;
+                        if (velocityTargetMet) metCount++;
+
+                        return (
+                          <tr 
+                            key={id}
+                            className={`hover:bg-white/[0.02] transition-colors ${
+                              isSelected ? 'bg-accent-cyan/[0.02]' : 'opacity-70 hover:opacity-100'
+                            }`}
+                          >
+                            <td className="p-4 flex items-center gap-2.5">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => {
+                                  setComparedRepIds(prev => 
+                                    prev.includes(id)
+                                      ? prev.filter(item => item !== id)
+                                      : [...prev, id]
+                                  );
+                                }}
+                                className="rounded border-white/10 bg-brand-black text-accent-cyan focus:ring-accent-cyan cursor-pointer"
+                              />
+                              <div>
+                                <span className="font-bold text-white flex items-center gap-1">
+                                  {rep.rank === 1 && <span title="1st Place Performer" className="text-xs">🏆</span>}
+                                  {rep.rank === 2 && <span title="2nd Place Performer" className="text-xs">🥈</span>}
+                                  {rep.rank === 3 && <span title="3rd Place Performer" className="text-xs">🥉</span>}
+                                  {rep.salesRepName}
+                                </span>
+                                <span className="text-[10px] text-gray-500">ID: {rep.salesRepId}</span>
+                              </div>
+                            </td>
+
+                            {/* Total Collected Column with Target Highlighting */}
+                            <td className={`p-4 text-right transition-colors ${
+                              orderTargetMet ? 'bg-accent-emerald/[0.03]' : 'bg-transparent'
+                            }`}>
+                              <span className="font-bold text-accent-emerald block">
+                                ৳{rep.totalOrdersBDT.toLocaleString()}
+                              </span>
+                              <div className="flex items-center justify-end gap-1 text-[9px] text-gray-500 mt-0.5">
+                                <span>Goal: ৳{rep.target.orderTargetBDT.toLocaleString()}</span>
+                                <span className={`px-1 rounded text-[8px] font-bold ${
+                                  orderTargetMet 
+                                    ? 'bg-accent-emerald/20 text-accent-emerald' 
+                                    : rep.orderProgress >= 50 
+                                    ? 'bg-accent-amber/20 text-accent-amber' 
+                                    : 'bg-accent-rose/20 text-accent-rose'
+                                }`}>
+                                  {rep.orderProgress}%
+                                </span>
+                              </div>
+                            </td>
+
+                            {/* Completed Check-Ins Column with Target Highlighting */}
+                            <td className={`p-4 text-right transition-colors ${
+                              checkinTargetMet ? 'bg-accent-emerald/[0.03]' : 'bg-transparent'
+                            }`}>
+                              <span className="font-bold text-white block">
+                                {rep.completedCheckins} <span className="text-[10px] text-gray-500">/ {rep.beatCount} Beats</span>
+                              </span>
+                              <div className="flex items-center justify-end gap-1 text-[9px] text-gray-500 mt-0.5">
+                                <span>Goal: {rep.target.checkinTarget}</span>
+                                <span className={`px-1 rounded text-[8px] font-bold ${
+                                  checkinTargetMet 
+                                    ? 'bg-accent-emerald/20 text-accent-emerald' 
+                                    : 'bg-accent-rose/20 text-accent-rose'
+                                }`}>
+                                  {rep.checkinProgress}%
+                                </span>
+                              </div>
+                            </td>
+
+                            <td className="p-4 text-right text-white">
+                              {rep.totalOutletsVisited} <span className="text-[10px] text-gray-500">visited</span>
+                            </td>
+
+                            {/* Velocity Column with Target Highlighting */}
+                            <td className={`p-4 text-right transition-colors ${
+                              velocityTargetMet ? 'bg-accent-cyan/[0.04]' : 'bg-transparent'
+                            }`}>
+                              <span className="font-black text-accent-cyan block">
+                                ৳{rep.velocityPerCheckin.toLocaleString()}
+                              </span>
+                              <div className="flex items-center justify-end gap-1 text-[9px] text-gray-500 mt-0.5">
+                                <span>Goal: ৳{rep.target.velocityTarget.toLocaleString()}</span>
+                                <span className={`px-1 rounded text-[8px] font-bold ${
+                                  velocityTargetMet ? 'bg-accent-cyan/20 text-accent-cyan' : 'bg-accent-rose/20 text-accent-rose'
+                                }`}>
+                                  {rep.velocityProgress}%
+                                </span>
+                              </div>
+                            </td>
+
+                            <td className="p-4 text-right">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                rep.coverageRate >= 80 ? 'bg-accent-emerald/10 text-accent-emerald' : 'bg-accent-amber/10 text-accent-amber'
+                              }`}>
+                                {rep.coverageRate}%
+                              </span>
+                            </td>
+
+                            {/* Brand-new targets summary dashboard column */}
+                            <td className="p-4 text-center">
+                              <div className="flex flex-col items-center justify-center gap-1">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  metCount === 3 
+                                    ? 'bg-accent-emerald/25 text-accent-emerald' 
+                                    : metCount > 0 
+                                    ? 'bg-accent-cyan/25 text-accent-cyan' 
+                                    : 'bg-accent-rose/25 text-accent-rose'
+                                }`}>
+                                  {metCount} / 3 Goals Met
+                                </span>
+                                <div className="flex items-center gap-1 text-[10px]">
+                                  <span className={`w-1.5 h-1.5 rounded-full ${orderTargetMet ? 'bg-accent-emerald' : 'bg-white/10'}`} title="Sales Goal" />
+                                  <span className={`w-1.5 h-1.5 rounded-full ${checkinTargetMet ? 'bg-accent-emerald' : 'bg-white/10'}`} title="Check-in Goal" />
+                                  <span className={`w-1.5 h-1.5 rounded-full ${velocityTargetMet ? 'bg-accent-emerald' : 'bg-white/10'}`} title="Velocity Goal" />
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Active Beat Details */}
+            <div className="lg:col-span-2 p-6 rounded-2xl bg-white/[0.02] border border-white/5 space-y-6">
+              {/* Dropdown for active Beat */}
+              <div className="flex items-center justify-between bg-white/[0.01] border border-white/5 p-3 rounded-xl gap-2">
+                <span className="text-xs font-bold text-white/70">Select Agent Beat:</span>
+                <select
+                  value={selectedBeatId}
+                  onChange={(e) => setSelectedBeatId(e.target.value)}
+                  className="bg-white/5 border border-white/10 rounded p-2 px-3 text-xs font-bold uppercase tracking-wider text-white focus:outline-none focus:border-accent-cyan cursor-pointer"
+                >
+                  {beatPlans.map(b => (
+                    <option key={b.id} value={b.id} className="bg-brand-black">Beat: {b.salesRepName}</option>
+                  ))}
+                </select>
+              </div>
+
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={selectedBeatId}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -12 }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                  className="space-y-6"
+                >
+                  <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                    <div>
+                      <span className="text-[10px] font-mono text-accent-cyan uppercase">Active Beat Representative</span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <h3 className="text-sm font-bold text-white">{activeBeat.salesRepName}</h3>
+                        <span className="bg-white/5 border border-white/10 rounded p-1 text-[9px] text-gray-400 font-mono">
+                          ID: {activeBeat.salesRepId}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[9px] font-mono text-white/40 block">TARGET COVERAGE PROGRESS</span>
+                      <span className="text-xs font-mono font-bold text-accent-emerald">
+                        {activeBeat.outletsVisited} / {activeBeat.totalOutlets} Visited
+                      </span>
+                    </div>
+                  </div>
 
             {/* Geo Actions */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -608,7 +1570,9 @@ export default function SalesForceModule({
                 })}
               </div>
             </div>
-          </div>
+                </motion.div>
+              </AnimatePresence>
+            </div>
 
           {/* Competitor activities & shelf audits */}
           <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col justify-between">
@@ -641,6 +1605,7 @@ export default function SalesForceModule({
             </div>
           </div>
         </div>
+      </div>
       )}
 
       {/* VIEW 2: SEASONAL DEMAND PLANNER (NEW) */}
